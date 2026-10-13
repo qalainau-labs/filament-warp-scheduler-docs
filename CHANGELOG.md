@@ -5,6 +5,15 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Dropping an element whose `data-warp-scheduler-draggable` is a number, a string or a JSON array no longer fails on the
+  server; the value is passed to `onExternalDrop()` as `['value' => ...]`.
+- The README no longer mentions `->recordAttributes()`, which Filament 5 tables do not have, and explains how to escape
+  the JSON in `extraAttributes()`.
+
 ## [1.0.0] - 2026-10-13
 
 ### Added

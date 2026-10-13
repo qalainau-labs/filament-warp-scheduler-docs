@@ -355,8 +355,25 @@ Any element can be dragged onto a scheduler that has `onExternalDrop()`:
 <tr draggable="true" data-warp-scheduler-draggable='{"id": 5}' data-warp-scheduler-title="Repair" data-warp-scheduler-duration="90">
 ```
 
-With Filament tables, add the attributes with `->recordAttributes()` (or `extraAttributes()` on a column). Dragging an
-event onto another scheduler on the same page calls that scheduler's `onAdopt()`; both reload when it returns `true`.
+`data-warp-scheduler-draggable` holds a JSON object (passed to `onExternalDrop()` as `$data`) or any other value, such
+as an ID (passed as `['value' => ...]`). In Blade, escape the JSON so its quotes cannot end the attribute: `{{ json_encode($data) }}`.
+
+Filament 5 tables have no row attributes, so add the attributes to a column with `extraAttributes()`; the cell becomes
+the thing to drag. Filament does not HTML-escape attribute values (it only turns `"` into `\"`), so escape the JSON
+yourself with `e()`, or the attribute ends at the first quote and the drop does nothing:
+
+```php
+TextColumn::make('title')
+    ->extraAttributes(fn (Job $record): array => [
+        'draggable' => 'true',
+        'data-warp-scheduler-draggable' => e(json_encode(['id' => $record->id])),
+        'data-warp-scheduler-title' => e($record->title),
+        'data-warp-scheduler-duration' => $record->minutes,
+    ])
+```
+
+Dragging an event onto another scheduler on the same page calls that scheduler's `onAdopt()`; both reload when it
+returns `true`.
 
 ### Unscheduled pool
 
