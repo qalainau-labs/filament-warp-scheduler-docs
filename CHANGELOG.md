@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-10-14
+
+### Fixed
+
+- Creating, editing or deleting an event no longer re-renders the whole page, which showed as the page refreshing
+  once (on a page with many resources the response was several hundred kilobytes). Only the closed modal and the
+  unscheduled pool are rendered again; the board fetches its events as before. Typing in an event's form while it is
+  open renders only that modal, also when the last change is sent together with Save.
+- While dragging on the timeline or the Gantt chart, the start and end times (and why a place is refused or flagged)
+  are shown in the time header, over a band marking the event's time, instead of on the board, where they covered the
+  rows around the drop target.
+- Dragging an item from the unscheduled pool or the side list no longer shows the browser's picture of the item under
+  the cursor, which covered the drop target. On the board the item is drawn where it would land, and its times are
+  shown in the time header.
+- A short event can be lengthened again. Events 18 pixels tall (or wide, on the timeline) or less had no resize
+  edge, so an event shortened to 15 minutes could only be moved. The end edge now stays grabbable on any event; the
+  start edge still needs room for moving.
+
 ## [1.0.4] - 2026-10-14
 
 ### Fixed
