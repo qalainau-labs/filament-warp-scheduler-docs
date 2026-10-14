@@ -5,6 +5,22 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.0.2] - 2026-10-14
+
+### Fixed
+
+- The Excel export includes the two fills Excel reserves in the workbook's styles, and its temporary file is removed
+  even when writing fails.
+- On a slow first visit, when Filament's font finished loading after the scheduler was first drawn, text kept the
+  fallback font's widths. The scheduler now measures again and redraws once the font has loaded.
+- Avatars from SVG images without a width and height are drawn instead of left empty.
+
+### Changed
+
+- `composer.json` declares `ext-zip`, which the Excel export needs.
+
 ## [1.0.1] - 2026-10-13
 
 ### Fixed
