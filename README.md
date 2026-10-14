@@ -117,7 +117,10 @@ class TodaySchedule extends SchedulerWidget
 }
 ```
 
-In any other Livewire component (for example a resource's relation page), implement `HasScheduler`, `HasSchemas` and `HasActions`, use `InteractsWithScheduler`, `InteractsWithSchemas` and `InteractsWithActions`, and render `{{ $this->getWarpScheduler() }}`. The scheduler's properties and methods are prefixed with `warpScheduler`, so they do not clash with `$record` or your own properties.
+If you give the widget a view of its own, keep `<x-filament-actions::modals />` in it: a widget renders its own
+create, edit and delete modals, unlike a page.
+
+In any other Livewire component (for example a resource's relation page), implement `HasScheduler`, `HasSchemas` and `HasActions`, use `InteractsWithScheduler`, `InteractsWithSchemas` and `InteractsWithActions`, and render `{{ $this->getWarpScheduler() }}`. If the component is not a Filament page, also render `<x-filament-actions::modals />` so that the create, edit and delete modals can open. The scheduler's properties and methods are prefixed with `warpScheduler`, so they do not clash with `$record` or your own properties.
 
 ### Resources
 
@@ -307,8 +310,9 @@ The create and edit modals are ordinary Filament forms, so dependent ("cascading
 ])
 ```
 
-On narrow screens (under 640px) the scheduler switches to `mobileView()` (the list by default; `null` keeps the
-current view), turns the view tabs into a select and hides the unscheduled pool. Right-to-left pages (`dir="rtl"`)
+On phones (screens under 640px wide) the scheduler switches to `mobileView()` (the list by default; `null` keeps the
+current view) and narrows the resource column. When the scheduler itself is narrower than 640px, for example a
+widget in half a dashboard, it keeps its view but turns the view tabs into a select and hides the unscheduled pool. Right-to-left pages (`dir="rtl"`)
 are mirrored automatically; `rtl()` forces it.
 
 ### Filters

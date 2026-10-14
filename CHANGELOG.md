@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-14
+
+### Fixed
+
+- Event modals open from dashboard widgets. `SchedulerWidget` did not render the action modals, so clicking, creating,
+  editing or deleting an event on a widget showed nothing. If you give a widget a view of your own, keep
+  `<x-filament-actions::modals />` in it.
+- After clicking an event and closing its quick info or menu with Escape, the arrow keys, Delete and Ctrl/Cmd+C act on
+  the selected event again; focus now returns to the board.
+- The Resource day view shows one day instead of the same week as Resource week.
+- Pulling a locked or read-only event and letting go no longer opens its edit form.
+- The list of events for screen readers and the browser's find is updated when an event is renamed or reassigned
+  without moving.
+- On phones, resource names are shown in the narrow resource column; the extra columns and the per-row utilization
+  meter are left out there.
+
+### Changed
+
+- The phone layout (`mobileView()` and the narrow resource column) follows the screen width instead of the
+  scheduler's width, as the README described, so a widget in half a desktop dashboard keeps its view. A scheduler
+  narrower than 640px still shows its views in a select and hides the unscheduled pool.
+
 ## [1.0.2] - 2026-10-14
 
 ### Fixed
