@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-14
+
+### Fixed
+
+- Placing an event from the unscheduled pool, by dragging it or with the sparkles button, no longer re-renders the
+  whole page and fetches every loaded event again, which showed as the page refreshing once. The placed event comes
+  back in the response, and the item leaves the pool in the browser.
+- After an action (create, edit, delete) or a change to a recurring series, the board keeps showing its events while
+  they are fetched again instead of emptying until the response arrives.
+- The start and end times shown while dragging no longer cover the dragged event when there is no room above it:
+  they go below it, on a translucent background.
+
 ## [1.0.3] - 2026-10-14
 
 ### Fixed
