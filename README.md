@@ -4,6 +4,10 @@
 
 **A resource scheduler for Filament that stays fast with thousands of rows: the timeline, calendars and Gantt chart are drawn on a `<canvas>`, while forms, actions, filters, notifications and permissions are Filament's own.**
 
+<a href="https://filament-warp-scheduler.webllsystem.com/"><img src="https://raw.githubusercontent.com/qalainau-labs/filament-warp-scheduler-docs/main/art/live-demo.png" alt="Try the live demo: filament-warp-scheduler.webllsystem.com" width="592"></a>
+
+Scroll through 5,000 people, drag bookings, cover shifts, dispatch jobs and plan a project at **[filament-warp-scheduler.webllsystem.com](https://filament-warp-scheduler.webllsystem.com/)**. No sign-up needed; the data is reset every hour.
+
 Calendar plugins for Filament wrap a JavaScript calendar in a widget. That works for a few dozen resources, but a planning board with hundreds or thousands of people, rooms or machines needs more: a resource timeline that does not build a DOM node per cell, recurring events that are expanded on the server, rules that stop double bookings, and a way to see how busy each resource is.
 
 Warp Scheduler keeps your Eloquent models. Point it at a resource model and one or more event models, and you get a resource timeline, resource day and week views, week, work week, day, N-day, month, month agenda, year and list views and a Gantt chart, with drag and drop that saves through your policies.
