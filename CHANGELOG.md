@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-10-18
+
+### Changed
+
+- The commercial license agreement is now one text for every Warp plugin (the plugin you purchase is the "Software"); the terms are unchanged.
+- The Excel export writes the sheet to a temporary file as it goes instead of building it in memory, so exporting many events needs much less memory.
+
 ## [1.0.5] - 2026-10-14
 
 ### Fixed
