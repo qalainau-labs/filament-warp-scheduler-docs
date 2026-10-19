@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-20
+
+### Changed
+
+- The license agreement adds a refund policy (section 5): a full refund within seven days of purchase for a defect
+  that cannot be fixed or worked around.
+
 ## [1.1.1] - 2026-10-20
 
 ### Changed
