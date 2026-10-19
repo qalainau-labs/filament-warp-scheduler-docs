@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-20
+
+### Changed
+
+- The license agreement no longer lists a Lifetime tier. The tiers are Single Project and Unlimited Projects, each with one year of updates.
+
 ## [1.1.0] - 2026-10-19
 
 ### Added
