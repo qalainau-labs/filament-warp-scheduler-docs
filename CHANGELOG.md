@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-19
+
+### Added
+
+- A board (kanban) above or beside the timeline: `EventSource::stage()` names the stage column and `board()` lists
+  the columns, as `BoardColumn`s or an enum. Cards move between columns, onto a resource to be scheduled, and back
+  from the timeline to a column, which takes the record off the timeline. Columns can have a WIP limit
+  (`limit()`), show only the nearest cards (`recent()`) and keep the schedule (`keepsSchedule()`); cards can show
+  how long they have waited (`agingFrom()`). Users switch between the board above or beside the timeline, the board
+  only and the timeline only. `canMoveCard()`, `afterCardMoved()`, `cardView()` and
+  `EventSource::unscheduleUsing()` customise it, and the browser receives `warp-scheduler:card-moved`.
+- `warp-scheduler-refresh` makes every scheduler on the page fetch its events again (and redraw its board).
+
 ## [1.0.6] - 2026-10-18
 
 ### Changed

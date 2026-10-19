@@ -55,6 +55,7 @@ Only the rows and the time range on screen are drawn, and events are loaded per 
 - **Views**: resource timeline (day, week, month, quarter and year zoom), resource day and week views (by resource or by date), week, work week, day, N-day, month, month agenda, year and list views, and a Gantt chart. Each view can have its own slot size, visible hours and days.
 - **Built for large boards**: canvas rendering with vertical and horizontal virtualization, collapsible nested resource groups, lazy loading of events and placeholders while they load.
 - **Drag and drop**: move events in time and across resources, copy with Alt, resize from either edge, select several with Ctrl/Cmd+click and drag them together, copy and paste, rename in place, and create events by selecting a range. Changes appear at once and are saved on the server, which checks read-only mode, locked events and your model policies. Refused changes roll back with a notification.
+- **Board (kanban)**: show the same records in columns by stage above or beside the timeline. Drag a card to another column to change its stage, onto a resource to schedule it, or drag an event from the timeline back to the board to take it off the timeline. WIP limits, the days each card has waited, and columns built from your own enum.
 - **Drop from anywhere**: drop unscheduled records from a pool, rows from a Filament table or any element on the page, people from a side list onto shifts, or events from another scheduler. Book a request into the first free slot with one click.
 - **Your content**: subtitles, icons, badges, avatars and solid, outline or dashed styles on events; server-rendered tooltips and a quick-info popup; resource avatars, descriptions and extra columns; holidays, prices per day and labelled blocked time; shifts as header rows.
 - **Filament actions**: each event source with a schema gets create, edit and delete actions in Filament modals. Add your own actions to the event context menu with `eventActions()`, and add, edit or delete resources on the board.
@@ -396,6 +397,83 @@ Records whose start column is empty are listed beside the timeline and can be dr
 Each pool item has a button that books it into the first free slot of the resources on screen within two weeks,
 respecting business hours, blocked time and the conflict rules.
 
+### Board (kanban)
+
+![Work orders in columns by stage above a timeline of technicians](https://raw.githubusercontent.com/qalainau-labs/filament-warp-scheduler-docs/main/art/board.png)
+
+Give an event source a stage column and list the columns:
+
+```php
+use Qalainau\FilamentWarpScheduler\Board\BoardColumn;
+
+$scheduler
+    ->events([
+        EventSource::make(WorkOrder::class)
+            ->resource('technician_id')
+            ->start('starts_at')
+            ->end('ends_at')
+            ->stage('stage'),
+    ])
+    ->board([
+        BoardColumn::make('received'),
+        BoardColumn::make('parts')->label('Waiting for parts')->limit(4),
+        BoardColumn::make('ready')->label('Ready to book')->limit(5),
+        BoardColumn::make('booked')->scheduled()->recent(8),
+        BoardColumn::make('done')->color('success')->keepsSchedule()->recent(8),
+    ])
+    ->agingFrom('created_at', warning: 3, danger: 7);
+```
+
+The board replaces the unscheduled pool. There are three kinds of column:
+
+| Column | Holds | Moving a card into it |
+| --- | --- | --- |
+| Default | Records without a start | Takes a scheduled record off the timeline (its start and end are cleared) |
+| `scheduled()` | Records on the timeline (one column) | Drop the card on a resource instead; it then moves here by itself |
+| `keepsSchedule()` | Done, invoiced and the like | Changes the stage and keeps the record on the timeline |
+
+Cards in the default columns can be dragged onto the timeline, or booked into the first free slot with their
+sparkles button. An event dragged from the timeline onto a column moves there, so dropping a booked job on
+"Ready to book" takes it off the timeline. Clicking a card opens the same modal as clicking the event.
+
+- `limit(4)` turns the column heading red above four cards; `limit(4, strict: true)` refuses the fifth.
+- `recent(8)` shows only the first eight cards of a column that keeps growing, nearest first, and counts the rest.
+- `agingFrom()` shows how many days each card before `scheduled()` has waited.
+- `boardLayout(BoardLayout::Beside)` sets the default layout. Users can switch between the board above or beside the
+  timeline, the board only and the timeline only; the choice is kept in the browser.
+- `cardView('work-orders.card')` renders each card with your own view, which receives `$record`, `$card` and
+  `$column`.
+- `canMoveCard(fn (Model $record, string $from, string $to): bool => ...)` decides which moves are allowed; your
+  model policy's `update` is checked as well.
+- `afterCardMoved(fn (Model $record, string $from, string $to) => ...)` runs after each move.
+- `EventSource::unscheduleUsing(fn (Model $record) => ...)` replaces how a record is taken off the timeline. By
+  default the start and end are cleared and the resource is kept.
+
+Columns can come from an enum. Labels and colors are read from `HasLabel` and `HasColor`, and an enum that implements
+`BoardStage` configures its own columns:
+
+```php
+enum WorkOrderStage: string implements BoardStage, HasLabel
+{
+    case Ready = 'ready';
+    case Booked = 'booked';
+    case Done = 'done';
+
+    public function configureBoardColumn(BoardColumn $column): void
+    {
+        match ($this) {
+            self::Ready => $column->limit(5),
+            self::Booked => $column->scheduled(),
+            self::Done => $column->keepsSchedule(),
+        };
+    }
+
+    // getLabel() ...
+}
+
+$scheduler->board(WorkOrderStage::class);
+```
+
 ### Recurring events
 
 ```php
@@ -444,12 +522,16 @@ $scheduler
 
 They run after drags, forms, renames, imports and drops. In the browser, the scheduler element dispatches
 `warp-scheduler:navigated`, `warp-scheduler:event-clicked`, `warp-scheduler:slot-selected`, `warp-scheduler:moved`,
-`warp-scheduler:copied`, `warp-scheduler:renamed`, `warp-scheduler:dropped`, `warp-scheduler:adopted` and
-`warp-scheduler:scheduled` with the details in `event.detail`:
+`warp-scheduler:copied`, `warp-scheduler:renamed`, `warp-scheduler:dropped`, `warp-scheduler:adopted`,
+`warp-scheduler:scheduled` and `warp-scheduler:card-moved` with the details in `event.detail`:
 
 ```blade
 <div x-on:warp-scheduler:moved="console.log($event.detail)">{{ $this->getWarpScheduler() }}</div>
 ```
+
+To make every scheduler on the page fetch its events and redraw its board after something else changed them,
+dispatch `warp-scheduler-refresh`, from Livewire (`$this->dispatch('warp-scheduler-refresh')`) or from the browser
+(`window.dispatchEvent(new CustomEvent('warp-scheduler-refresh'))`).
 
 ### Gantt
 
