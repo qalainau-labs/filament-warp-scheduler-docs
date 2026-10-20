@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-20
+
+### Added
+
+- A dashboard widget that uses `InteractsWithPageFilters` fetches its events again when the page filters change, and
+  closures such as `resources()` can take `array $pageFilters`.
+- Changing the dates of a Gantt task in the edit modal moves its successors along, as dragging it does (unless
+  `dependencies(reschedule: false)`).
+
+### Fixed
+
+- Events are found in the right range when the app time zone (`app.timezone`), Filament's time zone or the
+  scheduler's `timezone()` is not UTC. With the app in a zone ahead of UTC, the last hours of the visible range (in
+  the day view, the whole evening) were missing; with the scheduler showing another zone than the app, the conflict
+  rules looked at the wrong hours, so the create and edit modals could double-book a resource. Utilization, day
+  cells, exports, `.ics` downloads, baselines and blocked time use the same corrected range.
+- A save that a model event stops (`saving`, `creating` or `updating` returning `false`) is reported as refused
+  instead of as saved: the event goes back, the modal stays open, and no hooks run and nothing is sent to synced
+  calendars. An Alt-drag copy the model refused no longer leaves an event without a record on the timeline.
+- `ChangeRejected` thrown from `unscheduleUsing()` while moving a board card is shown as a notification instead of
+  failing the request.
+- Board cards show the new resource, time and title after an event was dragged, resized, moved with the keyboard,
+  pasted, renamed, dropped from outside or moved to another scheduler.
+- Moving a board card to another column fetches the timeline again, so colours, badges or locks that depend on the
+  column are up to date.
+- The resource day and resource week views show the new columns after a filter or a resource edit changed the
+  resources, instead of the old ones until the window was resized. Settings that a filter changes (such as hidden days
+  from a closure) apply at once, and the utilization row no longer shows the numbers of the previous groups while the
+  new ones load.
+- Tooltips without a `tooltip()` view show the new title and time after an event changed.
+- An event moved twice quickly (two drags, or the arrow keys) goes back to its last saved place when the saves fail,
+  instead of staying at the first, unsaved, place.
+- Pasting cut events that fails no longer brings back an event deleted since it was cut, or puts it back where it was
+  before it was moved.
+- After an Alt-drag copy, the copy is selected, so the highlight and the arrow keys act on the same event. The same
+  holds when an event shared by several resources is moved to another row.
+- After the events are fetched again (an action, `warp-scheduler-refresh`), dependency arrows and blocked time that
+  were removed elsewhere disappear.
+- An `onExternalDrop()` callback that does not return the record it created no longer leaves the drop empty: the
+  scheduler fetches the events again.
+- The event menu and the quick info no longer open late, after the user scrolled, clicked elsewhere or changed the
+  range while they loaded.
+- The rename box stays on its event while the scheduler scrolls.
+- When several selected events are moved together and one of them is refused, the hooks and synced calendars are no
+  longer told about the moves that were rolled back.
+- Day cells are fetched again after an action or `warp-scheduler-refresh`, and after a filter change.
+- The migrations run on MySQL. Three indexes (on `warp_scheduler_dependencies`, `warp_scheduler_occurrence_exceptions`
+  and `warp_scheduler_external_links`) had default names longer than MySQL's 64 characters, so the migration stopped
+  with an error. If you published the migrations before and they failed on MySQL, publish them again.
+- Searching events by title ignores upper and lower case on PostgreSQL too (it matched only the exact case there).
+- Sending reminders no longer fails on PostgreSQL when it runs inside a database transaction and a reminder was
+  already sent.
+
 ## [1.2.0] - 2026-10-20
 
 ### Added

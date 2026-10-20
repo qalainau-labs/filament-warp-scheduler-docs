@@ -163,6 +163,10 @@ An event model can implement `Schedulable` (`getSchedulerColumns()`) to declare 
 
 All-day events are floating dates, like iCalendar: they stay on the same day in every time zone.
 
+Dates are stored as wall-clock times in the app time zone (`app.timezone`), as Laravel does. The scheduler shows them
+in its own time zone (`timezone()`, by default Filament's), and the app, Filament and the scheduler can each use a
+different zone.
+
 Event content, tooltips and the quick-info popup:
 
 ```php
@@ -201,10 +205,13 @@ $scheduler
         'id' => $employee->id, 'title' => $employee->name, 'subtitle' => $employee->role,
         'image' => $employee->avatar_url, 'group' => $employee->team,
     ])->all(), label: 'Available')
-    ->onExternalDrop(function (array $data, CarbonImmutable $start, ?Model $resource, ?Model $event) {
+    ->onExternalDrop(function (array $data, CarbonImmutable $start, ?Model $resource, ?Model $event): ?Model {
         // dropped on an event: replace who covers it; dropped on an empty slot: create one
+        // return the record you created or changed, so the scheduler can draw it at once
     });
 ```
+
+If the callback returns nothing (or creates several records), the scheduler fetches the visible events again.
 
 Resource column, day cells and holidays:
 
@@ -330,6 +337,29 @@ $scheduler->filtersForm([
 ```
 
 The fields update the scheduler as soon as they change (text inputs wait for typing to stop). Their state is passed as `$filters` to `resources()` and `modifyQueryUsing()`.
+
+On a dashboard, a `SchedulerWidget` can follow the dashboard's own filters with Filament's `InteractsWithPageFilters`.
+When the page filters change, the scheduler fetches its events again. Read them as `$this->pageFilters` in your
+closures, or take `array $pageFilters` in the scheduler's closures such as `resources()`:
+
+```php
+use Filament\Widgets\Concerns\InteractsWithPageFilters;
+
+class TeamSchedule extends SchedulerWidget
+{
+    use InteractsWithPageFilters;
+
+    public function scheduler(Scheduler $scheduler): Scheduler
+    {
+        return $scheduler
+            ->resources(fn (array $pageFilters) => Staff::query()->where('team_id', $pageFilters['team'] ?? null))
+            ->events([
+                EventSource::make(Shift::class)->resource('staff_id')
+                    ->modifyQueryUsing(fn (Builder $query) => $query->where('status', $this->pageFilters['status'] ?? 'confirmed')),
+            ]);
+    }
+}
+```
 
 ### Permissions, tenancy and read-only mode
 
@@ -472,6 +502,9 @@ What else happens depends on where the change came from:
 | An `.ics` import | No event of the file is imported |
 
 `ChangeRejected` can also be thrown from `unscheduleUsing()`, `onExternalDrop()` and `onAdopt()`.
+
+A model event that stops the save (a `saving`, `creating` or `updating` listener returning `false`) is treated the
+same way: the change is refused with the message "The change was not saved.", and no hooks run.
 
 #### Preventing double bookings when two people book at the same moment
 
@@ -729,9 +762,10 @@ Each resource is a project and its events are the tasks.
 
 #### Calculating dates yourself
 
-When a task is moved later, the scheduler moves its successors along in calendar time: a successor of a task that now
-ends on Friday evening starts on Friday evening, even if nobody works at the weekend. If your app plans with working
-hours, holidays or its own rules, turn this off and move the successors yourself:
+When a task is moved later (by dragging it, or with new dates in the edit modal), the scheduler moves its successors
+along in calendar time: a successor of a task that now ends on Friday evening starts on Friday evening, even if nobody
+works at the weekend. If your app plans with working hours, holidays or its own rules, turn this off and move the
+successors yourself:
 
 ```php
 $scheduler
