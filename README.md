@@ -349,6 +349,187 @@ $scheduler->eventActions([
 
 Custom actions appear in the event's context menu, and their record is the clicked event.
 
+### Saving through your own code
+
+By default the scheduler saves your Eloquent models itself: it checks your policies and conflict rules, then calls
+`save()` or `delete()`. That is all most apps need.
+
+Some apps keep their business rules in services or actions instead, for example to validate a booking against
+data the scheduler does not know about, to lock resources so two people cannot book the same slot, to write an audit
+log, to send notifications, or to save through an external API. For those apps, each kind of change can be handed to
+your own code. Replace only the saves you need; the others keep the default behavior.
+
+#### Example
+
+A booking service that the scheduler calls for every change:
+
+```php
+use App\Models\Booking;
+use Carbon\CarbonInterface;
+use Qalainau\FilamentWarpScheduler\Exceptions\ChangeRejected;
+
+class BookingService
+{
+    public function create(array $data): Booking
+    {
+        return $this->save(new Booking, $data);
+    }
+
+    public function update(Booking $booking, array $data): Booking
+    {
+        return $this->save($booking, $data);
+    }
+
+    public function reschedule(Booking $booking, CarbonInterface $start, CarbonInterface $end, string $staffId): Booking
+    {
+        return $this->save($booking, ['staff_id' => $staffId, 'starts_at' => $start, 'ends_at' => $end]);
+    }
+
+    public function copy(Booking $original, CarbonInterface $start, CarbonInterface $end, string $staffId): Booking
+    {
+        return $this->save($original->replicate(), ['staff_id' => $staffId, 'starts_at' => $start, 'ends_at' => $end]);
+    }
+
+    public function cancel(Booking $booking): void
+    {
+        $booking->update(['status' => 'cancelled']);
+    }
+
+    protected function save(Booking $booking, array $attributes): Booking
+    {
+        $booking->fill($attributes);
+
+        if ($booking->starts_at->diffInHours($booking->ends_at) > 4) {
+            throw new ChangeRejected('Bookings can be at most four hours long.');
+        }
+
+        $booking->save();
+
+        return $booking;
+    }
+}
+```
+
+Tell the event source to use it:
+
+```php
+EventSource::make(Booking::class)
+    ->resource('staff_id')
+    ->createUsing(fn (array $data): Booking => app(BookingService::class)->create($data))
+    ->updateUsing(fn (Booking $record, array $data): Booking => app(BookingService::class)->update($record, $data))
+    ->deleteUsing(fn (Booking $record) => app(BookingService::class)->cancel($record))
+    ->moveUsing(fn (Booking $record, CarbonInterface $start, CarbonInterface $end, string $resource, bool $copy, ?Booking $original): Booking => $copy
+        ? app(BookingService::class)->copy($original, $start, $end, $resource)
+        : app(BookingService::class)->reschedule($record, $start, $end, $resource));
+```
+
+Since `deleteUsing()` here only marks the booking as cancelled, hide cancelled bookings with
+`modifyQueryUsing(fn (Builder $query) => $query->where('status', '!=', 'cancelled'))`.
+
+#### Which callback runs when
+
+| Callback | Called for | Receives | Returns |
+| --- | --- | --- | --- |
+| `createUsing()` | Saving the create modal, and each event of an `.ics` import | `array $data`: the form values, including the start, end and resource of the selected slot | The new record (required) |
+| `updateUsing()` | Saving the edit modal; renaming in place; moving a card to another board column; dragging a booked card back to a column that takes it off the timeline (unless `unscheduleUsing()` is set) | `Model $record`, `array $data`: the form values, or only the changed columns (the title, the stage, or the start and end set to `null`) | Nothing needed |
+| `deleteUsing()` | The delete action, from the context menu or the quick-info popup, and the Delete key | `Model $record` | Nothing needed |
+| `moveUsing()` | Every change of time or resource: dragging, resizing, moving with the keyboard, Alt-drag copies, copy and paste, moving several selected events together, successors moved by Gantt dependencies, and placing an event from the unscheduled pool or the board | See below | Nothing needed, unless you saved a different record than `$record` (for example a copy made by your service): then return that record |
+
+`moveUsing()` receives these arguments, by name:
+
+- `$record`: the event. For a copy it is an unsaved copy of the original event.
+- `$start` and `$end`: the new start and end, in the scheduler's time zone. The end is exclusive.
+- `$resource`: the key of the resource the event was dropped on.
+- `$from`: the key of the row the event was dragged from. It only matters for events shared by several resources
+  (`resourcesRelationship()`), where it tells which assignment to move.
+- `$copy`: `true` for Alt-drag copies and pasted events.
+- `$original`: the event that was copied, or `null` when it is not a copy.
+
+Before any of these callbacks runs, the scheduler has already checked read-only mode, locked events and your
+policies, and, for changes made by dragging or in the create and edit modals, the conflict rules. After it returns,
+the scheduler sends the change to synced calendars and runs your hooks (`afterEventCreated()`, `afterEventMoved()`
+and so on), exactly as for its own saves.
+
+#### Refusing a change
+
+Each change runs in a database transaction. To refuse it, throw `ChangeRejected` with a message for the user:
+
+```php
+use Qalainau\FilamentWarpScheduler\Exceptions\ChangeRejected;
+
+throw new ChangeRejected('Room 3 was booked by someone else a moment ago.');
+```
+
+The transaction is rolled back, so nothing your callback wrote is kept, and the message is shown as a notification.
+What else happens depends on where the change came from:
+
+| Change | When it is refused |
+| --- | --- |
+| Dragging, resizing, the keyboard, a pasted event | The event jumps back to where it was |
+| Several selected events moved together | None of them is moved |
+| The create or edit modal | The modal stays open with what the user typed, so they can correct it |
+| Delete | The event stays, and the confirmation stays open |
+| An `.ics` import | No event of the file is imported |
+
+`ChangeRejected` can also be thrown from `unscheduleUsing()`, `onExternalDrop()` and `onAdopt()`.
+
+#### Preventing double bookings when two people book at the same moment
+
+The conflict rules (`NoOverlap` and the others) are checked before the transaction starts. They stop double bookings
+in normal use, but when two people drop a booking on the same slot within the same fraction of a second, both checks
+can pass. If that must never happen, check again inside your callback while holding a lock:
+
+```php
+protected function save(Booking $booking, array $attributes): Booking
+{
+    $booking->fill($attributes);
+
+    // Wait until no one else is booking for this person, then check again
+    $staff = Staff::query()->whereKey($booking->staff_id)->lockForUpdate()->firstOrFail();
+
+    $taken = Booking::query()
+        ->where('staff_id', $staff->getKey())
+        ->when($booking->exists, fn (Builder $query) => $query->whereKeyNot($booking->getKey()))
+        ->where('starts_at', '<', $booking->ends_at)
+        ->where('ends_at', '>', $booking->starts_at)
+        ->exists();
+
+    if ($taken) {
+        throw new ChangeRejected("{$staff->name} was booked by someone else a moment ago.");
+    }
+
+    $booking->save();
+
+    return $booking;
+}
+```
+
+The lock lasts until the scheduler's transaction ends, so the second request waits for the first one and then sees
+its booking. MySQL and PostgreSQL support `lockForUpdate()`; SQLite locks the whole database instead. On PostgreSQL an
+exclusion constraint on the booked time range per resource is an even stronger guarantee.
+
+#### Bookings that need several resources
+
+When one booking needs, for example, a person, a room and a machine, save all of the assignments in the same callback.
+They share the scheduler's transaction, so either all of them are saved or, if one of them fails or you throw
+`ChangeRejected`, none of them is.
+
+#### Things to know
+
+- A `Select` for a `belongsTo` relationship (`Select::make('staff_id')->relationship('staff', 'name')`) puts the
+  foreign key in `$data` like any other field. Fields for relationships with several records, such as
+  `Select::make('rooms')->relationship('rooms', 'name')->multiple()`, save that relationship themselves after
+  `createUsing()` or `updateUsing()` has run. To save those in your own code too, drop `->relationship()`, give the
+  field its `options()`, and the selected keys arrive in `$data`.
+- `moveUsing()` can receive a new record that is not saved yet (`$record->exists` is `false`): for a copy, when one
+  occurrence of a recurring event (`recurring()`) is changed and the plugin creates a record for it, when an `.ics`
+  import has no `createUsing()`, and when calendar sync creates an event that was added in Google Calendar or Outlook.
+  Save it, or save a record of your own and return it; the plugin then links that record to the series or the
+  external calendar.
+- The series of recurring events (the rule and the skipped or changed occurrences) is stored in the plugin's own
+  tables. If your app manages series itself, store each occurrence as a record of its own instead, with a series
+  identifier in your own columns, and add actions such as "Move this and following" with `eventActions()`.
+
 ### Search, drops from outside and other schedulers
 
 ```php
@@ -545,6 +726,37 @@ EventSource::make(Task::class)->resource('project_id')->progress('progress');
 ```
 
 Each resource is a project and its events are the tasks.
+
+#### Calculating dates yourself
+
+When a task is moved later, the scheduler moves its successors along in calendar time: a successor of a task that now
+ends on Friday evening starts on Friday evening, even if nobody works at the weekend. If your app plans with working
+hours, holidays or its own rules, turn this off and move the successors yourself:
+
+```php
+$scheduler
+    ->dependencies(reschedule: false)
+    ->afterEventMoved(function (Task $record, $livewire) {
+        // Your own planning code, for example with your working-day calendar
+        app(ProjectPlanner::class)->rescheduleSuccessorsOf($record);
+
+        // Draw the tasks your code moved
+        $livewire->dispatch('warp-scheduler-refresh');
+    });
+```
+
+With `reschedule: false` the scheduler still draws the arrows, lets users link tasks by dragging, and highlights the
+critical path. It only stops moving the successors, both while dragging and when saving. The dependencies are stored
+in the `warp_scheduler_dependencies` table (`predecessor_type`, `predecessor_id`, `successor_type`, `successor_id`,
+`type` and `lag_minutes`), so your planning code can read them from there.
+
+`reschedule` also accepts a closure, for example to let users choose with a filter field:
+
+```php
+$scheduler
+    ->filtersForm([Toggle::make('reschedule')->label('Move the tasks after it')->default(true)])
+    ->dependencies(reschedule: fn (array $filters): bool => (bool) ($filters['reschedule'] ?? true));
+```
 
 ### iCal and printing
 

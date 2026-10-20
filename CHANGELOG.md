@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-20
+
+### Added
+
+- `createUsing()`, `updateUsing()` and `deleteUsing()` on an event source replace how records are created, changed
+  and deleted, so every change can go through your own services. `updateUsing()` also covers renaming in place,
+  moving cards on the board and taking records off the timeline; `createUsing()` also covers `.ics` imports.
+- Throw `ChangeRejected` from a save callback, `onExternalDrop()` or `onAdopt()` to refuse a change: the database
+  transaction is rolled back, the message is shown, the event goes back and a modal stays open.
+- `moveUsing()` receives `$copy` and `$original` for Alt-drag copies and pasted events, and can return the record it
+  created.
+- `dependencies(reschedule: false)` keeps dependency arrows, linking and the critical path without moving successors,
+  so dates can be calculated by your application.
+
+### Fixed
+
+- Tooltips show the new title and time after an event was renamed, moved or edited, instead of the ones loaded
+  before the change.
+
+### Changed
+
+- Renaming in place, drops from outside and adoptions from another scheduler run in a database transaction, and
+  deleting an event removes it from synced calendars only after the record was deleted.
+
 ## [1.1.3] - 2026-10-20
 
 ### Changed
