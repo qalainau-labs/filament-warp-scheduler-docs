@@ -100,7 +100,7 @@ php artisan migrate
 php artisan filament:assets
 ```
 
-The migrations create the plugin's own tables (`warp_scheduler_*`) for recurrence rules, availability, blocked time, dependencies, baselines, iCal links and calendar connections. Your event and resource tables are not changed. To edit the migrations, publish them with `php artisan vendor:publish --tag=filament-warp-scheduler-migrations`.
+The migrations create the plugin's own tables (`warp_scheduler_*`) for recurrence rules, availability, blocked time, dependencies, baselines, iCal links and calendar connections. Your event and resource tables are not changed. To edit the migrations, publish them with `php artisan vendor:publish --tag=filament-warp-scheduler-migrations`. Publish them before you run `php artisan migrate` for the first time: Warp Scheduler then runs your copy instead of its own. If the tables already exist, change them with a migration of your own instead.
 
 > Run `php artisan filament:assets` again after every update of the package.
 

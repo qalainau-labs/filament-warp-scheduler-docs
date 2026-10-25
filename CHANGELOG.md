@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-25
+
+### Fixed
+
+- After publishing the migrations (`php artisan vendor:publish --tag=filament-warp-scheduler-migrations`, as the README
+  says for editing them), `php artisan migrate` stopped with "table already exists": Warp Scheduler ran its own copy as
+  well. A published migration now replaces the bundled one; migrations you have not published still run as before.
+- Printing any other page of the app (Ctrl+P, or another plugin's print) gave blank pages, and every page printed in
+  landscape. The scheduler's print styles are loaded on every page; they now hide the rest of the page only while the
+  scheduler itself is printing, and the paper orientation is set only for the scheduler's own print.
+
 ## [1.3.0] - 2026-10-25
 
 ### Upgrading
