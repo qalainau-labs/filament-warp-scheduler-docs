@@ -4,9 +4,9 @@
 
 **A resource scheduler for Filament that stays fast with thousands of rows: the timeline, calendars and Gantt chart are drawn on a `<canvas>`, while forms, actions, filters, notifications and permissions are Filament's own.**
 
-<a href="https://filament-warp-scheduler.webllsystem.com/"><img src="https://raw.githubusercontent.com/qalainau-labs/filament-warp-scheduler-docs/main/art/live-demo.png" alt="Try the live demo: filament-warp-scheduler.webllsystem.com" width="592"></a>
+<a href="https://demo.warpui.com/scheduler"><img src="https://raw.githubusercontent.com/qalainau-labs/filament-warp-scheduler-docs/main/art/live-demo.png" alt="Try the live demo: demo.warpui.com/scheduler" width="592"></a>
 
-Scroll through 5,000 people, drag bookings, cover shifts, dispatch jobs and plan a project at **[filament-warp-scheduler.webllsystem.com](https://filament-warp-scheduler.webllsystem.com/)**. No sign-up needed; the data is reset every hour.
+Scroll through 5,000 people, drag bookings, cover shifts, dispatch jobs and plan a project at **[demo.warpui.com/scheduler](https://demo.warpui.com/scheduler)**. No sign-up needed; the data is reset every hour.
 
 Calendar plugins for Filament wrap a JavaScript calendar in a widget. That works for a few dozen resources, but a planning board with hundreds or thousands of people, rooms or machines needs more: a resource timeline that does not build a DOM node per cell, recurring events that are expanded on the server, rules that stop double bookings, and a way to see how busy each resource is.
 
