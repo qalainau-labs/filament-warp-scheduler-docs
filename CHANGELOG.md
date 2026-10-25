@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-25
+
+### Upgrading
+
+- Run `php artisan migrate`. The new `update_warp_scheduler_keys_to_strings` migration changes the key columns of the
+  package's tables (`owner_id`, `tenant_id`, `schedulable_id`, `predecessor_id`, `successor_id`, `override_id`,
+  `resource_id`) from numbers to strings. Existing rows are kept. If you query these tables yourself on PostgreSQL,
+  compare them with string keys (`(string) $model->getKey()`).
+- If your event model already has a tenant relationship (for example `Booking::team()`) but older rows have an empty
+  `team_id`, fill it before updating (see the README), or turn the new filter off with
+  `EventSource::make(Booking::class)->scopeToTenant(false)`.
+
+### Added
+
+- Full support for Filament's multi-tenancy (`Panel::tenant()`), documented in the new "Tenancy" section of the README.
+  Events are filtered by the event model's own tenant relationship when it has one, and `EventSource::scopeToTenant()`
+  changes the relationship name or turns this off for one source.
+- Events and resources created in the scheduler (the create modal, Alt-drag copies, `.ics` imports, events pulled from
+  Google or Outlook, and the "+" button for resources) are attached to the current tenant.
+
+### Fixed
+
+- In a panel with tenancy, the unscheduled pool and the board listed the cards of every tenant, and their cards could be
+  booked or moved from another tenant. They now only show the current tenant's records.
+- A Gantt dependency of another tenant could be removed by its number.
+- The create and edit modals accepted a resource of another tenant sent from the browser.
+- Opening the delete modal of an event or a resource that is not shown (for example another tenant's, by sending its
+  number) failed with a server error. The modal now stays closed.
+- A resource that belongs to several tenants (for example a user in two teams) showed the events of every tenant, and a
+  change in one tenant was pushed to the calendars connected in the other. Events are now filtered by their own tenant
+  relationship, and changes only go to calendars connected in the same tenant.
+- An iCal feed whose tenant was deleted listed the events of every tenant; it now returns 404. A feed whose user left
+  the tenant returns 403, and a calendar connection in the same situation stops syncing.
+- A queued sync job, or a feed served by a long-running worker such as Octane, could keep the tenant of the previous
+  job or request.
+- Teams, users, resources and events with UUID or ULID keys could not be saved on MySQL, MariaDB and PostgreSQL
+  (subscription links, connected calendars, recurring events, Gantt dependencies and baselines, reminders, availability
+  and blocked time), because the package's tables stored these keys in number columns. They are string columns now.
+
 ## [1.2.1] - 2026-10-20
 
 ### Added

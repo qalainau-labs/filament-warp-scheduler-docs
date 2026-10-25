@@ -67,7 +67,7 @@ Only the rows and the time range on screen are drawn, and events are loaded per 
 - **iCal**: download the visible range as `.ics`, or subscribe from Google Calendar, Apple Calendar or Outlook with a personal link that keeps the user's filters and tenant.
 - **Two-way calendar sync**: connect a Google or Microsoft calendar to a resource. Changes on either side are synced through queued jobs, push notifications and delta queries.
 - **Print and PDF**: print the current view or a date range, landscape or portrait, in the light palette, page by page, or save it as a PDF from the print dialog.
-- **Filament integration**: a page, a dashboard widget, or a trait for any Livewire component. Filter form built from Filament fields, tenancy, dark mode, panel colors, translations (English and Japanese), SPA mode, a compact layout on phones and right-to-left languages. Hooks after every change, and browser events.
+- **Filament integration**: a page, a dashboard widget, or a trait for any Livewire component. Filter form built from Filament fields, multi-tenancy for SaaS apps, dark mode, panel colors, translations (English and Japanese), SPA mode, a compact layout on phones and right-to-left languages. Hooks after every change, and browser events.
 - **Accessibility**: keyboard navigation and editing, a screen reader list of the events on screen that also makes them findable with the browser's find, and live announcements of saves.
 
 | Calendar views | Gantt chart |
@@ -364,8 +364,164 @@ class TeamSchedule extends SchedulerWidget
 ### Permissions, tenancy and read-only mode
 
 - If a model has a policy, `create`, `update` and `delete` are checked before any change. Without a policy, changes are allowed, as in Filament resources.
-- In a panel with tenancy, resources are scoped to the current tenant (`scopeToTenant(false)` turns this off). Events are only returned for the resources shown, so they are scoped too.
+- In a panel with tenancy, the scheduler only shows and changes the current tenant's resources and events. See [Tenancy](#tenancy) below.
 - `readOnly()` disables dragging, creating and deleting; clicking an event opens a read-only view.
+
+### Tenancy
+
+If your app is a SaaS where each customer (a team, a company, a clinic) has its own data, use Filament's
+[multi-tenancy](https://filamentphp.com/docs/users/tenancy). The scheduler follows the panel's tenant on its own:
+someone who opens team A never sees, drags or edits team B's resources and events, even by sending another team's IDs
+from the browser. In a panel without tenancy, nothing changes.
+
+#### Example
+
+A panel at `/app/{team}` where each team has its own rooms and bookings, and a user can belong to several teams:
+
+```php
+// app/Providers/Filament/AppPanelProvider.php
+use App\Models\Team;
+
+return $panel
+    ->id('app')
+    ->path('app')
+    ->tenant(Team::class, slugAttribute: 'slug');   // the ownership relationship is "team" by default
+```
+
+```php
+// app/Models/User.php
+use Filament\Models\Contracts\HasTenants;
+use Filament\Panel;
+
+class User extends Authenticatable implements HasTenants
+{
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class);
+    }
+
+    public function getTenants(Panel $panel): Collection
+    {
+        return $this->teams;
+    }
+
+    public function canAccessTenant(Model $tenant): bool
+    {
+        return $this->teams()->whereKey($tenant)->exists();
+    }
+}
+```
+
+```php
+// app/Models/Room.php and app/Models/Booking.php both have a team_id column and:
+public function team(): BelongsTo
+{
+    return $this->belongsTo(Team::class);
+}
+```
+
+```php
+// app/Filament/Pages/Bookings.php
+class Bookings extends SchedulerPage
+{
+    public function scheduler(Scheduler $scheduler): Scheduler
+    {
+        return $scheduler
+            ->resources(Room::class)
+            ->events([
+                EventSource::make(Booking::class)
+                    ->resource('room_id')
+                    ->schema([
+                        TextInput::make('title')->required(),
+                        Select::make('room_id')
+                            ->relationship('room', 'name', fn (Builder $query) => $query->whereBelongsTo(Filament::getTenant()))
+                            ->required(),
+                        DateTimePicker::make('starts_at')->required(),
+                        DateTimePicker::make('ends_at')->required(),
+                    ]),
+            ]);
+    }
+}
+```
+
+#### What is kept per tenant
+
+- **Resources**: `resources()` is filtered by the tenant relationship, the same way Filament filters a resource's table.
+- **Events**: only events of the tenant's resources are loaded, searched, exported, printed, counted in the
+  utilization and checked by the conflict rules. If the event model also has the tenant relationship (like
+  `Booking::team()` above), events are filtered by it too.
+- **Changes**: dragging, resizing, copying, renaming, deleting, the edit modal, the unscheduled pool, the board, the
+  Gantt dependencies and `.ics` imports only accept records of the current tenant. A resource of another tenant chosen
+  in a form (for example by editing the request) is refused.
+- **New records**: events and resources created in the scheduler (the create modal, Alt-drag copies, `.ics` imports,
+  events pulled from Google or Outlook, the "+" button for resources) are attached to the current tenant: the
+  `team_id` column is filled, or the tenant is added to a many-to-many relationship.
+- **iCal feeds and calendar sync**: each subscription link and each connected calendar remembers the panel, the tenant
+  and the user who made it. Feeds and queued sync jobs run with that tenant again, so a feed of team A only lists team
+  A's events, and a change in team B is never pushed to a calendar connected in team A. A link stops working (and a
+  connection stops syncing) when its tenant is deleted or its user leaves the tenant.
+
+#### Columns and migrations
+
+The scheduler adds no columns to your tables. You need what Filament's tenancy needs anyway:
+
+- Your resource model has a relationship to the tenant: a `team_id` column with a `BelongsTo`, a morph, or a
+  many-to-many relationship through a pivot table (for example rooms shared by several teams).
+- Recommended: give the event model the same relationship (for example a `team_id` column on `bookings`). The
+  scheduler then filters events by it and fills it when it creates events. It is required when a resource can belong to
+  more than one tenant, such as users who are members of several teams, and for the unscheduled pool and the board
+  (see the notes below).
+
+The package's own tables (`warp_scheduler_feeds`, `warp_scheduler_calendar_connections`) already have the `tenant_type`
+and `tenant_id` columns. No new migration of your own is needed.
+
+Teams, users, resources and events can have UUID or ULID keys (`HasUuids`, `HasUlids`) as well as numbers: the
+package's tables keep these keys in string columns. If you installed version 1.2.1 or earlier, `php artisan migrate`
+runs `update_warp_scheduler_keys_to_strings`, which changes those columns from numbers to strings and keeps your data.
+
+If your event model has a `team_id` column with empty values from before, fill it from the resource before you
+update, or those events will be hidden in the panel with tenancy:
+
+```php
+// in a migration; works on SQLite, MySQL, MariaDB and PostgreSQL
+DB::statement('update bookings set team_id = (select team_id from rooms where rooms.id = bookings.room_id) where team_id is null');
+```
+
+#### Other relationship names, and turning it off
+
+The scheduler uses the panel's ownership relationship (`->tenant(Team::class, ownershipRelationship: 'company')`), like
+Filament resources. Change it for the scheduler or for one kind of events:
+
+```php
+$scheduler
+    ->scopeToTenant(relationship: 'teams')        // Room::teams() is many-to-many
+    ->events([
+        EventSource::make(Booking::class)
+            ->scopeToTenant(relationship: 'team'),  // Booking::team() is a BelongsTo
+    ]);
+```
+
+If the event model does not have a relationship with that name, events are filtered by their resources only. If you
+name a relationship on an `EventSource` that the model does not have, the scheduler throws an exception instead of
+showing other tenants' events.
+
+To share data between tenants on purpose, turn the filter off for the whole scheduler (`$scheduler->scopeToTenant(false)`)
+or only for the events of one source (`EventSource::make(Booking::class)->scopeToTenant(false)`).
+
+#### Good to know
+
+- When `resources()` returns a query or a model class, it is filtered for you. When it returns a collection
+  (`fn () => collect([...])`), filter it yourself.
+- Your form fields are your own: a `Select` with `relationship()` lists every record unless the related model has a
+  resource in the panel (Filament then scopes it) or you filter the query as in the example above. The scheduler
+  still refuses to save a resource of another tenant, but the names would show in the list.
+- `createUsing()`, `moveUsing()`, `onExternalDrop()`, `onAdopt()` and `eventsUsing()` run your code: set the tenant
+  and filter by it there yourself (`Filament::getTenant()`).
+- Without a tenant relationship on the event model, events in the unscheduled pool and on the board that have no
+  resource yet cannot be told apart by tenant. Add the relationship to the event model, or filter them in
+  `modifyQueryUsing()`.
+- Reminders (`warp-scheduler:send-reminders`) run outside the panel for all tenants; each reminder goes to the
+  recipients of its own event.
 
 ### Actions
 
