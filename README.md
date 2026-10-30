@@ -67,7 +67,7 @@ Only the rows and the time range on screen are drawn, and events are loaded per 
 - **iCal**: download the visible range as `.ics`, or subscribe from Google Calendar, Apple Calendar or Outlook with a personal link that keeps the user's filters and tenant.
 - **Two-way calendar sync**: connect a Google or Microsoft calendar to a resource. Changes on either side are synced through queued jobs, push notifications and delta queries.
 - **Print and PDF**: print the current view or a date range, landscape or portrait, in the light palette, page by page, or save it as a PDF from the print dialog.
-- **Filament integration**: a page, a dashboard widget, or a trait for any Livewire component. Filter form built from Filament fields, multi-tenancy for SaaS apps, dark mode, panel colors, translations (English and Japanese), SPA mode, a compact layout on phones and right-to-left languages. Hooks after every change, and browser events.
+- **Filament integration**: a page, a dashboard widget, or a trait for any Livewire component. Filter form built from Filament fields, multi-tenancy for SaaS apps, dark mode, panel colors, translations (English, Japanese, German, French, Spanish, Italian, Brazilian Portuguese, Korean and Chinese, simplified and traditional), SPA mode, a compact layout on phones and right-to-left languages. Hooks after every change, and browser events.
 - **Accessibility**: keyboard navigation and editing, a screen reader list of the events on screen that also makes them findable with the browser's find, and live announcements of saves.
 
 | Calendar views | Gantt chart |
