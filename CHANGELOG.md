@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-31
+
+### Added
+
+- `zoomSettings([TimelineZoom::Day->value => ['slotWidth' => 96, 'rowHeight' => 64], ...])` changes the slot width,
+  time steps, drag rounding, row height and the other view settings per timeline zoom, on top of `viewSettings()`.
+  Switching the zoom switches the settings. Without it, nothing changes.
+- `rowHeight` in `viewSettings()` and `zoomSettings()`, for a row height per view or per zoom.
+- `viewLabels([...])` and `zoomLabels([...])` rename the view and zoom tabs from PHP, with a text, a translation key or
+  a closure, without publishing the language files. Views and zooms that are not listed keep their translated names.
+
 ## [1.5.0] - 2026-10-31
 
 ### Added

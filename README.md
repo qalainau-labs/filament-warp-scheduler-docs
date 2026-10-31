@@ -52,7 +52,7 @@ Only the rows and the time range on screen are drawn, and events are loaded per 
 
 ![A shift board with avatars and a list of people to drag onto shifts](https://raw.githubusercontent.com/qalainau-labs/filament-warp-scheduler-docs/main/art/shift-board.png)
 
-- **Views**: resource timeline (day, week, month, quarter and year zoom), resource day and week views (by resource or by date), week, work week, day, N-day, month, month agenda, year and list views, and a Gantt chart. Each view can have its own slot size, visible hours and days.
+- **Views**: resource timeline (day, week, month, quarter and year zoom), resource day and week views (by resource or by date), week, work week, day, N-day, month, month agenda, year and list views, and a Gantt chart. Each view and each timeline zoom can have its own slot size, row height, visible hours and days, and the tabs can be renamed from PHP.
 - **Built for large boards**: canvas rendering with vertical and horizontal virtualization, collapsible nested resource groups, lazy loading of events and placeholders while they load.
 - **Drag and drop**: move events in time and across resources, copy with Alt, resize from either edge, select several with Ctrl/Cmd+click and drag them together, copy and paste, rename in place, and create events by selecting a range. Changes appear at once and are saved on the server, which checks read-only mode, locked events and your model policies. Refused changes roll back with a notification.
 - **Board (kanban)**: show the same records in columns by stage above or beside the timeline. Drag a card to another column to change its stage, onto a resource to schedule it, or drag an event from the timeline back to the board to take it off the timeline. WIP limits, the days each card has waited, and columns built from your own enum.
@@ -311,8 +311,11 @@ $scheduler
     ->viewSettings([
         SchedulerView::ResourceTimeline->value => ['hiddenDays' => [0, 6], 'visibleHours' => ['08:00', '20:00']],
         SchedulerView::Week->value => ['slotDuration' => 10],
+        SchedulerView::Gantt->value => ['rowHeight' => 44],
     ]);
 ```
+
+To change these settings per timeline zoom as well, see [Settings per zoom](#settings-per-zoom).
 
 More views are available on demand (the default set is `SchedulerView::defaults()`):
 
@@ -349,6 +352,73 @@ $scheduler
   (`$refs.stage.warpScheduler.setZoom('year')`) goes to the first allowed zoom instead, and so does a page update
   (a filter, for example) that takes the current zoom out of the list.
 - The other views (week, month, list and so on) have their own range and are not affected.
+
+#### Settings per zoom
+
+The slot width, the time steps and the row height that suit a day rarely suit a quarter. `viewSettings()` changes them
+per view; `zoomSettings()` changes them per timeline zoom, on top of the view settings:
+
+```php
+use Qalainau\FilamentWarpScheduler\Enums\TimelineZoom;
+
+$scheduler
+    ->timelineZooms([TimelineZoom::Day, TimelineZoom::Week, TimelineZoom::Month])
+    ->slotWidth(64)
+    ->rowHeight(40)
+    ->zoomSettings([
+        // a delivery day: wide 15-minute ticks, tall rows for two lines of text, drops round to 5 minutes
+        TimelineZoom::Day->value => ['slotWidth' => 96, 'slotDuration' => 15, 'snapDuration' => 5, 'rowHeight' => 64],
+        // the week: narrow days and compact rows
+        TimelineZoom::Week->value => ['slotWidth' => 32, 'rowHeight' => 32],
+        // Month is not listed, so it uses slotWidth(64) and rowHeight(40)
+    ]);
+```
+
+- `zoomSettings(array|Closure $settings)`: the keys are zooms (`TimelineZoom` values: `'day'`, `'week'`, `'month'`,
+  `'quarter'`, `'year'`), the values the same settings as `viewSettings()`: `slotWidth`, `slotDuration`,
+  `snapDuration`, `rowHeight`, `headerRows`, `visibleHours`, `hiddenDays`, `scrollTime` (and `slotHeight`,
+  `dayCount`, `shifts`, which the timeline does not use). Only the settings you give change; the others come from the
+  view settings, then from the scheduler-wide methods (`slotWidth()`, `rowHeight()` and so on).
+- The order is: scheduler-wide settings, then `viewSettings()` for the view, then `zoomSettings()` for the zoom shown.
+- As without zooms, `slotDuration` (the fine ticks) and `snapDuration` (the drag rounding) are used by the Day and
+  Week zooms; the Month, Quarter and Year zooms round to whole days.
+- They apply to the views with zooms (the resource timeline and the Gantt view). The week, month, list and other
+  views ignore them.
+- Switching the zoom switches the settings at once: the ticks, the row heights and the drag rounding change with it,
+  and switching back restores them.
+- `rowHeight` is the height of one lane of a resource row in pixels, at least 20. It can also go in `viewSettings()`
+  (for example a taller Gantt view).
+- An unknown zoom throws a `ValueError`, an unknown setting an `InvalidArgumentException`.
+- Without `zoomSettings()`, nothing changes from before.
+
+#### Names of the view and zoom tabs
+
+The tabs say "Timeline", "Week", "Day" and so on in the app locale. To call them something else, such as the name your
+users have for the board, give the names in PHP; there is no need to publish the language files:
+
+```php
+use Qalainau\FilamentWarpScheduler\Enums\SchedulerView;
+use Qalainau\FilamentWarpScheduler\Enums\TimelineZoom;
+
+$scheduler
+    ->viewLabels([
+        SchedulerView::ResourceTimeline->value => 'Route board',            // plain text
+        SchedulerView::ResourceWeek->value => 'dispatch.tabs.week',        // a translation key, in the app locale
+        SchedulerView::Days->value => 'Next :count days',                  // :count is the number of days
+    ])
+    ->zoomLabels([
+        TimelineZoom::Day->value => fn (TimelineZoom $zoom): string => __('dispatch.tabs.one_day'),
+    ]);
+```
+
+- `viewLabels(array|Closure $labels)` and `zoomLabels(array|Closure $labels)`: the keys are views (`SchedulerView`
+  values) or zooms (`TimelineZoom` values), the values a text, a translation key or a closure. The closure receives
+  the view (`$view` / `SchedulerView $view`) or the zoom (`$zoom` / `TimelineZoom $zoom`) and returns the name.
+- A text or key goes through `__()`, so a translation key shows in the current locale and plain text shows as it is.
+- For `SchedulerView::Days`, `:count` is replaced by the number of days, and a pluralized key (`'{1} :count day|[2,*]
+  :count days'`) picks the right form.
+- Views and zooms that are not listed, and labels that are `null` or empty, keep the translated names.
+- The names are used in the view tabs, the zoom tabs and the view menu on narrow screens.
 
 #### Time format
 
