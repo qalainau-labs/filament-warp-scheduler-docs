@@ -182,6 +182,25 @@ $scheduler->quickInfo();  // clicking an event shows its details and actions ins
 
 Strings are escaped; return an `Htmlable` (a view or `HtmlString`) for markup.
 
+#### Events without the time in the box
+
+By default an event box shows its time: before the title on a short box, and as a second line ("07:20 – 08:00")
+on a box 34px tall or more. When the time is already clear from where the box sits, or the box should only name
+the job, turn it off with `showTime(false)`. The box then shows the title, and the subtitle as its second line:
+
+```php
+EventSource::make(Delivery::class)
+    ->title(fn (Delivery $record): string => $record->customer->name)
+    ->subtitle(fn (Delivery $record): string => $record->order_number)
+    ->showTime(false);   // or fn (Delivery $record): bool => ... per event
+```
+
+- `showTime(bool|Closure $condition = true)`: whether the box draws the time. A closure receives the record
+  (`fn (Delivery $record): bool`), so some events can keep their time.
+- Only the box changes. The tooltip, the quick-info popup, the label while dragging, the list views, the board
+  cards and the screen reader text still give the time.
+- All-day events never show a time, so the setting makes no difference to them.
+
 Avatars, solid or dashed events and shifts:
 
 ```php
@@ -307,6 +326,51 @@ More views are available on demand (the default set is `SchedulerView::defaults(
 
 Hidden days and hours are left out of the timeline (hour zooms squeeze the night away), the week and month
 grids and the time grids. Header rows finer than the zoom are skipped.
+
+#### Choosing the timeline zooms
+
+The resource timeline has five zooms: Day, Week, Month, Quarter and Year. Some boards only make sense at a few of
+them (a delivery route for one day is a row of thin stripes at Year), so you can choose which zooms the toolbar
+offers:
+
+```php
+use Qalainau\FilamentWarpScheduler\Enums\TimelineZoom;
+
+$scheduler
+    ->timelineZooms([TimelineZoom::Day, TimelineZoom::Week])  // the buttons, in this order
+    ->initialZoom(TimelineZoom::Day);
+```
+
+- `timelineZooms(array|Closure|null $zooms)`: `TimelineZoom` cases or their values (`'day'`, `'week'`, ...). The
+  default (`null` or an empty array) offers all five. An unknown value throws a `ValueError`.
+- With a single zoom, the zoom buttons are not shown at all.
+- If `initialZoom()` is not one of them, the scheduler starts on the first zoom in the list.
+- A zoom that is not allowed is never shown: switching to one from JavaScript
+  (`$refs.stage.warpScheduler.setZoom('year')`) goes to the first allowed zoom instead, and so does a page update
+  (a filter, for example) that takes the current zoom out of the list.
+- The other views (week, month, list and so on) have their own range and are not affected.
+
+#### Time format
+
+Times are written the way the app locale writes them, so `en` shows "7:20 AM" and `en_GB` shows "7:20". To write
+every time on the scheduler the same way as the rest of your app, give a format:
+
+```php
+$scheduler->timeFormat('HH:mm');    // 07:20, 19:05
+$scheduler->timeFormat('H:mm');     // 7:20, 19:05
+$scheduler->timeFormat('h:mm A');   // 7:20 AM, 7:05 PM
+```
+
+- `timeFormat(string|Closure|null $format)`: uses the tokens of Carbon's `isoFormat()`: `H` / `HH` (0–23, `HH`
+  with a leading zero), `h` / `hh` (1–12), `m` / `mm` (minutes), `A` / `a` (AM/PM in the app locale, `a` in lower
+  case). Put any other letters in brackets: `'H[h]mm'` gives "7h20". Characters such as `:`, `.` and spaces are
+  written as they are. Other letters (dates, seconds) throw an `InvalidArgumentException`.
+- It applies everywhere the scheduler writes a time: the event boxes, the hour ticks of the timeline and the time
+  grids, the tooltip, the quick-info popup, the label while dragging, the list and agenda views, the screen reader
+  text and the board cards. Dates around the time (such as "Oct 30,") stay in the app locale.
+- The time is the wall-clock time in the scheduler's time zone (`timezone()`), so it is right on the days the
+  clocks change.
+- `null` (the default) keeps the locale's own format.
 
 ### Dependent fields in the event form
 

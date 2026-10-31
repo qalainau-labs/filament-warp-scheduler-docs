@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-31
+
+### Added
+
+- `timelineZooms([TimelineZoom::Day, TimelineZoom::Week])` chooses which zooms the timeline offers. With one zoom, the
+  zoom buttons are hidden. A zoom that is not in the list (the initial zoom, or one set from JavaScript) falls back to
+  the first one.
+- `EventSource::showTime(false)` leaves the time out of the event boxes, so a box shows only its title and subtitle.
+  The tooltip, quick-info popup, drag label and list views still show the time.
+- `timeFormat('HH:mm')` writes every time on the scheduler in one format (Carbon `isoFormat` tokens: `H`, `HH`, `h`,
+  `hh`, `m`, `mm`, `A`, `a`): event boxes, the hour ticks of the timeline and time grids, tooltips, the quick-info
+  popup, the drag label, the list views and the board cards. Without it, times follow the locale as before
+  (`en_GB` writes "7:20", not "07:20").
+
 ## [1.4.0] - 2026-10-31
 
 ### Added
