@@ -52,7 +52,7 @@ Only the rows and the time range on screen are drawn, and events are loaded per 
 
 ![A shift board with avatars and a list of people to drag onto shifts](https://raw.githubusercontent.com/qalainau-labs/filament-warp-scheduler-docs/main/art/shift-board.png)
 
-- **Views**: resource timeline (day, week, month, quarter and year zoom), resource day and week views (by resource or by date), week, work week, day, N-day, month, month agenda, year and list views, and a Gantt chart. Each view and each timeline zoom can have its own slot size, row height, visible hours and days, and the tabs can be renamed from PHP.
+- **Views**: resource timeline (day, week, month, quarter and year zoom), resource day and week views (by resource or by date), week, work week, day, N-day, month, month agenda, year and list views, and a Gantt chart. Each view and each timeline zoom can have its own slot size, row height, visible hours and days, and the tabs can be renamed from PHP. The week and month zooms can stack each day's events in time order as full-width blocks, so a busy route stays readable with Monday to Friday on one screen.
 - **Built for large boards**: canvas rendering with vertical and horizontal virtualization, collapsible nested resource groups, lazy loading of events and placeholders while they load.
 - **Drag and drop**: move events in time and across resources, copy with Alt, resize from either edge, select several with Ctrl/Cmd+click and drag them together, copy and paste, rename in place, and create events by selecting a range. Changes appear at once and are saved on the server, which checks read-only mode, locked events and your model policies. Refused changes roll back with a notification.
 - **Board (kanban)**: show the same records in columns by stage above or beside the timeline. Drag a card to another column to change its stage, onto a resource to schedule it, or drag an event from the timeline back to the board to take it off the timeline. WIP limits, the days each card has waited, and columns built from your own enum.
@@ -302,7 +302,7 @@ $scheduler
     ->slotDuration(15)              // time grid slots, minutes (default 30)
     ->snapDuration(5)               // drag, resize and selection rounding, minutes
     ->slotHeight(20)                // time grid slot height, px
-    ->slotWidth(64)                 // minimum width of the finest timeline tick, px
+    ->slotWidth(64)                 // minimum width of the finest timeline tick (slotDuration in the day and week zooms), px
     ->scrollTime('08:00')           // where to scroll when today is not in range
     ->workingDays([1, 2, 3, 4, 5])  // default: days with business hours, else Monday to Friday
     ->hideNonWorkingDays()          // or ->hiddenDays([0, 6])
@@ -328,7 +328,8 @@ More views are available on demand (the default set is `SchedulerView::defaults(
 | `Year` | Twelve mini months shaded by how busy each day is; click a day to open it |
 
 Hidden days and hours are left out of the timeline (hour zooms squeeze the night away), the week and month
-grids and the time grids. Header rows finer than the zoom are skipped.
+grids and the time grids. Header rows finer than the zoom are skipped. With only day rows (or coarser) in the Day or
+Week zoom (`headerRows([HeaderRow::Day])`), each day is one cell, without hour lines.
 
 #### Choosing the timeline zooms
 
@@ -368,16 +369,17 @@ $scheduler
     ->zoomSettings([
         // a delivery day: wide 15-minute ticks, tall rows for two lines of text, drops round to 5 minutes
         TimelineZoom::Day->value => ['slotWidth' => 96, 'slotDuration' => 15, 'snapDuration' => 5, 'rowHeight' => 64],
-        // the week: narrow days and compact rows
-        TimelineZoom::Week->value => ['slotWidth' => 32, 'rowHeight' => 32],
+        // the week: hour ticks, 8px per hour, and compact rows
+        TimelineZoom::Week->value => ['slotDuration' => 60, 'slotWidth' => 8, 'rowHeight' => 32],
         // Month is not listed, so it uses slotWidth(64) and rowHeight(40)
     ]);
 ```
 
 - `zoomSettings(array|Closure $settings)`: the keys are zooms (`TimelineZoom` values: `'day'`, `'week'`, `'month'`,
   `'quarter'`, `'year'`), the values the same settings as `viewSettings()`: `slotWidth`, `slotDuration`,
-  `snapDuration`, `rowHeight`, `headerRows`, `visibleHours`, `hiddenDays`, `scrollTime` (and `slotHeight`,
-  `dayCount`, `shifts`, which the timeline does not use). Only the settings you give change; the others come from the
+  `snapDuration`, `rowHeight`, `headerRows`, `visibleHours`, `hiddenDays`, `scrollTime`, `eventLayout` (see
+  [Stacking each day's events](#stacking-each-days-events)) (and `slotHeight`, `dayCount`, `shifts`, which the
+  timeline does not use). Only the settings you give change; the others come from the
   view settings, then from the scheduler-wide methods (`slotWidth()`, `rowHeight()` and so on).
 - The order is: scheduler-wide settings, then `viewSettings()` for the view, then `zoomSettings()` for the zoom shown.
 - As without zooms, `slotDuration` (the fine ticks) and `snapDuration` (the drag rounding) are used by the Day and
@@ -388,8 +390,80 @@ $scheduler
   and switching back restores them.
 - `rowHeight` is the height of one lane of a resource row in pixels, at least 20. It can also go in `viewSettings()`
   (for example a taller Gantt view).
+- `slotWidth` is the minimum width of the finest tick: one `slotDuration` in the Day and Week zooms (30 minutes
+  unless you change it), one day in the Month and Quarter zooms, one week in the Year zoom. The Week above, with
+  `slotDuration => 60` and `slotWidth => 8`, is 8px per hour: 7 × 24 × 8 = 1344px, less with hidden hours and days.
+  If the screen is wider, the range is stretched to fill it. Without `slotWidth`, each zoom keeps its built-in width.
 - An unknown zoom throws a `ValueError`, an unknown setting an `InvalidArgumentException`.
 - Without `zoomSettings()`, nothing changes from before.
+
+#### Stacking each day's events
+
+On a week of delivery routes, a van has ten stops a day, one after another. Placed by time, each stop is a stripe a
+few pixels wide; widening the slots pushes Friday off the screen. The stacked layout keeps the days as columns and
+puts each day's events under each other, in time order, as full-width blocks of that day:
+
+```php
+use Qalainau\FilamentWarpScheduler\Enums\EventLayout;
+use Qalainau\FilamentWarpScheduler\Enums\TimelineZoom;
+
+$scheduler
+    ->timelineZooms([TimelineZoom::Day, TimelineZoom::Week])
+    ->hideNonWorkingDays()
+    ->zoomSettings([
+        // the day: stops placed by time
+        TimelineZoom::Day->value => ['slotDuration' => 60, 'slotWidth' => 150, 'rowHeight' => 56],
+        // the week: Monday to Friday side by side, each day's stops stacked, 40px each (two lines of text)
+        TimelineZoom::Week->value => ['eventLayout' => EventLayout::Stacked, 'rowHeight' => 40],
+    ]);
+```
+
+- `eventLayout`: `EventLayout::Timed` (the default: events are placed at their time, as long as they last) or
+  `EventLayout::Stacked` (or the values `'timed'` and `'stacked'`). Put it in `zoomSettings()` for one zoom, in
+  `viewSettings()` for the resource timeline, or use `->eventLayout(EventLayout::Stacked)` for every zoom.
+- Only the Week and Month zooms of the resource timeline stack, because their columns are days. The Day, Quarter and
+  Year zooms, the Gantt view and the calendar views always place events by time.
+- Each resource row is as tall as its busiest day: the number of events that day × `rowHeight`. `rowHeight` is the
+  height of one block, at least 24px in this layout. At 24px a block shows the title and the subtitle on one line;
+  from 38px the subtitle (or, with the time shown, the start and end) goes on a second line. An event that runs past
+  midnight spans the cells of the days it covers.
+- The header shows only the days (the hour ticks mean nothing here), and the days share the width of the screen.
+  `slotWidth` is the minimum width of one day, if the days should be wider than the screen allows.
+
+Dragging a block works like this:
+
+- The column you drop on gives the day, the row the resource, and the place between the blocks of that cell gives the
+  time. A line and a shadow block show where it goes, and the header shows the time it will get.
+- The new start is **the start of the event that is at that place now**: dropped as the third block of Tuesday, it
+  gets the start of Tuesday's current third event; dropped after the last block, it starts when the last one ends;
+  dropped on an empty day, it keeps its time of day. Inside the same day this is the same rule: dropped back on its
+  own place, nothing changes and nothing is saved. The length stays the same; an all-day event starts at 00:00 of
+  that day.
+- Your `moveUsing()` (or the plain save, without one) gets that `$start` and `$end`, and `$resource`, as for any other
+  move. The scheduler does not move the other events of the day. If the other stops should make room (renumber a
+  route and recompute its times), do it in `moveUsing()` and dispatch `warp-scheduler-refresh` so the board loads
+  the new times. For example, with stops of a fixed length from 07:00, the place in the route is
+  `round(minutes since 07:00 / length) + 1`:
+
+```php
+->moveUsing(function (Delivery $record, CarbonInterface $start, string $resource): Delivery {
+    // the place in the day's route that the drop stands for: 07:00 is 1, 07:50 is 2, ...
+    $position = (int) round(Carbon::parse($start)->setTimeFromTimeString('07:00')->diffInMinutes($start, false) / 50) + 1;
+
+    $record->moveTo(Van::findOrFail($resource), $start->toDateString(), max(1, $position));
+    $this->dispatch('warp-scheduler-refresh');
+
+    return $record;
+})
+```
+
+- Items dropped from the side list, the unscheduled pool or any `data-warp-scheduler-draggable` element follow the
+  same rule (`onExternalDrop()` gets that `$start`); on an empty day they start at the first visible hour.
+- Blocks cannot be resized in this layout (a block is always a whole day wide). Locked events do not move. Alt-drag
+  copies; the original then counts as one of the places. With the keyboard, left and right move an event by a day at
+  the same time, up and down to the next resource.
+- Rules (`rules()`) are checked against the new time, as for any move.
+- Utilization, quick info, colors and variants, tooltips and printing work as in the timed layout.
 
 #### Names of the view and zoom tabs
 

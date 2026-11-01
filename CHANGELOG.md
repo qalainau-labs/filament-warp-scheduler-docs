@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-01
+
+### Added
+
+- A stacked layout for the week and month zooms of the resource timeline:
+  `zoomSettings([TimelineZoom::Week->value => ['eventLayout' => EventLayout::Stacked]])` (or `viewSettings()`, or
+  `->eventLayout(EventLayout::Stacked)`) puts each day's events of a resource under each other, in time order, as
+  full-width blocks of that day, so a week of busy routes fits on one screen and every block is readable. Rows grow
+  to the busiest day. Dragging a block to another day, resource or place in the day gives it the start of the event
+  that is at that place now (after the last one: when the last one ends; on an empty day: the same time of day), and
+  dropping it back on its own place saves nothing. Drops from the side list and the pool work the same way. Without
+  it, nothing changes.
+
+### Fixed
+
+- A Week (or Day) zoom with only day header rows (`headerRows([HeaderRow::Day])`, also in `zoomSettings()`) still
+  drew a line every 30 minutes when the days were wide. Each day is now one cell.
+
+### Changed
+
+- `slotWidth` (in `slotWidth()`, `viewSettings()` and `zoomSettings()`) is now the width of the finest tick, as the
+  README says: one `slotDuration` in the Day and Week zooms (30 minutes unless you change it), one day in the Month
+  and Quarter zooms, one week in the Year zoom. Until now it was the width of the lowest header tick: a Week zoom
+  with `slotWidth => 100` was 100px per 6 hours, a Day zoom 100px per hour. **If you set `slotWidth`, your timeline
+  is now wider.** To keep the old width with 30-minute slots, divide the value by 12 for the Week zoom and by 2 for
+  the Day zoom (with `slotDuration => 60`: by 6 and 1), by 7 for the Quarter zoom and by about 4.3 for the Year zoom.
+  The Month zoom does not change. Without `slotWidth`, nothing changes.
+
 ## [1.6.0] - 2026-10-31
 
 ### Added
