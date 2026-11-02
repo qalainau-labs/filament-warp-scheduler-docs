@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-02
+
+### Fixed
+
+- The work week view is called 「週（平日）」 in Japanese and 「근무 주간」 in Korean, so it is clear it is a week of
+  weekdays (it was 「稼働日」 and 「근무일」, "working days").
+
 ## [1.7.0] - 2026-11-01
 
 ### Added
