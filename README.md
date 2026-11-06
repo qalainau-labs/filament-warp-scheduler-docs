@@ -361,6 +361,36 @@ Hidden days and hours are left out of the timeline (hour zooms squeeze the night
 grids and the time grids. Header rows finer than the zoom are skipped. With only day rows (or coarser) in the Day or
 Week zoom (`headerRows([HeaderRow::Day])`), each day is one cell, without hour lines.
 
+#### Height of the board
+
+By default the board is a box as high as the window (minus the page header) and scrolls inside. `height()` sets
+another fixed height. With `'auto'` the box of the resource timeline and the Gantt view is as high as its content
+instead: the header, every row and the utilization band right under the last row. Four vans make a short board; the
+page scrolls when the rows are taller than the window.
+
+```php
+use Qalainau\FilamentWarpScheduler\Enums\TimelineZoom;
+
+$scheduler
+    ->height('auto', max: '80vh')       // as high as the rows, at most 80% of the window
+    ->zoomSettings([
+        TimelineZoom::Day->value => ['height' => 'auto'],   // or per zoom only
+        TimelineZoom::Week->value => ['height' => 640],     // a fixed 640px for the week
+    ]);
+```
+
+- `height(int|string|Closure|null $height, int|string|Closure|null $max = null)`: a number is pixels, a string any
+  CSS length (`'70vh'`, `'40rem'`) or `'auto'`. `null` (the default) is the window-high box.
+- `max` only counts with `'auto'`: past it, the rest of the rows scroll inside the box as usual. Use it for long
+  resource lists (the board is drawn as one canvas as high as the box, so hundreds of rows make a very large canvas).
+- `height` in `zoomSettings()` (or `viewSettings()`) takes the same values and overrides `height()` while that zoom
+  (or view) is shown. Switching the zoom resizes the box at once: a stacked week grows with its stops, the day shrinks
+  back.
+- The box follows the rows as they change: events loading into more lanes, a stacked day getting busier, groups
+  opening and closing, the utilization band switched on or off.
+- `'auto'` applies to the views with rows (the resource timeline and the Gantt view). The calendar, month, list and
+  other views keep the default height.
+
 #### Choosing the timeline zooms
 
 The resource timeline has five zooms: Day, Week, Month, Quarter and Year. Some boards only make sense at a few of
@@ -408,7 +438,8 @@ $scheduler
 - `zoomSettings(array|Closure $settings)`: the keys are zooms (`TimelineZoom` values: `'day'`, `'week'`, `'month'`,
   `'quarter'`, `'year'`), the values the same settings as `viewSettings()`: `slotWidth`, `slotDuration`,
   `snapDuration`, `rowHeight`, `headerRows`, `visibleHours`, `hiddenDays`, `scrollTime`, `eventLayout` (see
-  [Stacking each day's events](#stacking-each-days-events)) (and `slotHeight`, `dayCount`, `shifts`, which the
+  [Stacking each day's events](#stacking-each-days-events)), `height` (see [Height of the board](#height-of-the-board))
+  (and `slotHeight`, `dayCount`, `shifts`, which the
   timeline does not use). Only the settings you give change; the others come from the
   view settings, then from the scheduler-wide methods (`slotWidth()`, `rowHeight()` and so on).
 - The order is: scheduler-wide settings, then `viewSettings()` for the view, then `zoomSettings()` for the zoom shown.
@@ -463,7 +494,9 @@ $scheduler
 Dragging a block works like this:
 
 - The column you drop on gives the day, the row the resource, and the place between the blocks of that cell gives the
-  time. A line and a shadow block show where it goes, and the header shows the time it will get.
+  time. A line and a shadow block show where it goes, and a label just under the day's header names the day and the
+  place, such as `Tue, Nov 3 · 2nd` (in the app language: `11月3日(火)の2番目`, `Di., 3. Nov. · an 2. Stelle`, ...),
+  followed by the reason if a rule refuses the place. The order is what counts here, so the label shows no time.
 - The new start is **the start of the event that is at that place now**: dropped as the third block of Tuesday, it
   gets the start of Tuesday's current third event; dropped after the last block, it starts when the last one ends;
   dropped on an empty day, it keeps its time of day. Inside the same day this is the same rule: dropped back on its

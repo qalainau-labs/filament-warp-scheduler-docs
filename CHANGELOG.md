@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-06
+
+### Added
+
+- `->height('auto')` makes the resource timeline and the Gantt view as high as their rows, with the utilization band
+  right under the last row, so a board of four vans no longer leaves an empty box and the page scrolls instead of the
+  board. `->height('auto', max: '80vh')` scrolls inside the box past the max. `height` also goes in `zoomSettings()`
+  and `viewSettings()` (`'auto'`, pixels or a CSS length), for example `'auto'` for the day and `640` for the week.
+  The other views keep the default height. See [Height of the board](README.md#height-of-the-board).
+
+### Changed
+
+- Stacked layout (`eventLayout: 'stacked'`): while dragging, the label names the day and the place the event goes
+  to (`Tue, Nov 3 · 2nd`, translated in the 10 languages) instead of a time range, and sits just under the day's
+  header instead of covering it. The timed layout still shows the times on the header. There is no setting for the
+  old label; the time the event gets is still passed to `moveUsing()` as before.
+
 ## [1.8.0] - 2026-11-06
 
 ### Added
