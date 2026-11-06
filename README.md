@@ -68,7 +68,8 @@ Only the rows and the time range on screen are drawn, and events are loaded per 
 - **Two-way calendar sync**: connect a Google or Microsoft calendar to a resource. Changes on either side are synced through queued jobs, push notifications and delta queries.
 - **Print and PDF**: print the current view or a date range, landscape or portrait, in the light palette, page by page, or save it as a PDF from the print dialog.
 - **Filament integration**: a page, a dashboard widget, or a trait for any Livewire component. Filter form built from Filament fields, multi-tenancy for SaaS apps, dark mode, panel colors, translations (English, Japanese, German, French, Spanish, Italian, Brazilian Portuguese, Korean and Chinese, simplified and traditional), SPA mode, a compact layout on phones and right-to-left languages. Hooks after every change, and browser events.
-- **Accessibility**: keyboard navigation and editing, a screen reader list of the events on screen that also makes them findable with the browser's find, and live announcements of saves.
+- **Accessibility**: keyboard navigation and editing, a screen reader list of the events on screen (title, time and resource) that also makes them findable with the browser's find and by automated tests, and live announcements of saves.
+- **Browser tests**: `eventRects()` tells where each event is on the screen, and `whenIdle()` waits until the board has loaded and saved.
 
 | Calendar views | Gantt chart |
 | --- | --- |
@@ -103,6 +104,35 @@ php artisan filament:assets
 The migrations create the plugin's own tables (`warp_scheduler_*`) for recurrence rules, availability, blocked time, dependencies, baselines, iCal links and calendar connections. Your event and resource tables are not changed. To edit the migrations, publish them with `php artisan vendor:publish --tag=filament-warp-scheduler-migrations`. Publish them before you run `php artisan migrate` for the first time: Warp Scheduler then runs your copy instead of its own. If the tables already exist, change them with a migration of your own instead.
 
 > Run `php artisan filament:assets` again after every update of the package.
+
+### AI coding assistants (Laravel Boost)
+
+Warp Scheduler ships instructions for AI coding assistants such as Claude Code, Cursor and Codex. If your app uses
+[Laravel Boost](https://laravel.com/docs/boost), the assistant learns how to use Warp Scheduler from them: which
+classes to extend, how to save changes and refuse them, what is easy to get wrong, and how to test a scheduler.
+
+- **Guidelines** (`resources/boost/guidelines/core.md`): a short summary that Boost adds to `CLAUDE.md`,
+  `AGENTS.md` and the other agent files. It also points the assistant to this README in `vendor/`, so it reads the
+  documentation of the version you have installed instead of guessing.
+- **Skill** `warp-scheduler-development` (`resources/boost/skills/`): the steps for adding a board, saving through your
+  own code, and writing feature and browser tests. The assistant loads it when it works on a scheduler.
+
+Boost does not add guidelines of other vendors' packages on its own. When `php artisan boost:install` asks
+"Which third-party AI guidelines/skills would you like to install?", select `qalainau/filament-warp-scheduler`. To do
+it without the question, add the package to `boost.json` and run the command again:
+
+```json
+{
+    "packages": ["qalainau/filament-warp-scheduler"]
+}
+```
+
+```bash
+php artisan boost:install --guidelines --skills -n
+```
+
+After you update Warp Scheduler, run `php artisan boost:update` so the assistant gets the instructions of the new
+version.
 
 ## Usage
 
@@ -683,6 +713,25 @@ The scheduler adds no columns to your tables. You need what Filament's tenancy n
 The package's own tables (`warp_scheduler_feeds`, `warp_scheduler_calendar_connections`) already have the `tenant_type`
 and `tenant_id` columns. No new migration of your own is needed.
 
+#### Adding tenancy to an app that already has data
+
+When you add tenancy to an app that already ran without it, the iCal subscription links and connected calendars saved
+before have no tenant, so no tenant sees them. Give them to one tenant with:
+
+```bash
+php artisan warp:assign-tenant "App\Models\Team" 1 --dry-run   # only counts the rows
+php artisan warp:assign-tenant "App\Models\Team" 1             # gives them to team 1
+```
+
+- The first argument is the tenant model class or its morph alias, the second the tenant's key. The command stops if
+  there is no such tenant.
+- It fills `tenant_type` and `tenant_id` only on rows where both are empty, in `warp_scheduler_feeds` and
+  `warp_scheduler_calendar_connections`. Rows that already have a tenant are not touched.
+- Other Warp plugins installed in the same app register the same command, and it covers their tables too (one run
+  for all of them). Everything is changed in one transaction: if a row would clash with one the tenant already has,
+  nothing is changed.
+- Your own tables (rooms, bookings) are not touched: fill their `team_id` yourself, as shown above.
+
 Teams, users, resources and events can have UUID or ULID keys (`HasUuids`, `HasUlids`) as well as numbers: the
 package's tables keep these keys in string columns. If you installed version 1.2.1 or earlier, `php artisan migrate`
 runs `update_warp_scheduler_keys_to_strings`, which changes those columns from numbers to strings and keeps your data.
@@ -730,6 +779,84 @@ or only for the events of one source (`EventSource::make(Booking::class)->scopeT
   `modifyQueryUsing()`.
 - Reminders (`warp-scheduler:send-reminders`) run outside the panel for all tenants; each reminder goes to the
   recipients of its own event.
+
+#### Testing with tenancy
+
+In a test, set the tenant the way Filament does in a request, then test the page with Livewire. The page asks the
+server for the events the same way the browser does, with `warpSchedulerFetch(start, end, resourceKeys)`, so you can
+check exactly what a tenant sees:
+
+```php
+use App\Filament\Pages\Bookings;
+use Filament\Facades\Filament;
+use Livewire\Livewire;
+
+beforeEach(function () {
+    $this->teamA = Team::factory()->create();
+    $this->teamB = Team::factory()->create();
+    $this->roomA = Room::factory()->for($this->teamA)->create();
+    $this->roomB = Room::factory()->for($this->teamB)->create();
+    $this->ours = Booking::factory()->for($this->teamA)->for($this->roomA)->create(['title' => 'Ours', 'starts_at' => '2026-10-07 01:00', 'ends_at' => '2026-10-07 02:00']);
+    $this->theirs = Booking::factory()->for($this->teamB)->for($this->roomB)->create(['title' => 'Theirs', 'starts_at' => '2026-10-07 01:00', 'ends_at' => '2026-10-07 02:00']);
+
+    $user = User::factory()->create();
+    $user->teams()->attach([$this->teamA->id, $this->teamB->id]);
+    $this->actingAs($user);
+
+    Filament::setCurrentPanel('app');
+    Filament::setTenant($this->teamA);
+});
+
+it('only shows team A its own rooms and bookings', function () {
+    $ms = fn (string $time): int => Carbon\Carbon::parse($time, 'UTC')->getTimestampMs();
+    $page = Livewire::test(Bookings::class);
+
+    // Ask for both teams' rooms, as a tampered browser could
+    $events = $page->call('warpSchedulerFetch', $ms('2026-10-05'), $ms('2026-10-12'), [(string) $this->roomA->id, (string) $this->roomB->id])
+        ->effects['returns'][0]['events'];
+
+    expect($events)->toHaveCount(1)
+        ->and($events[0])->toMatchArray(['k' => "0:{$this->ours->id}", 'r' => (string) $this->roomA->id, 't' => 'Ours'])
+        ->and($page->instance()->getWarpScheduler()->getResourceRecords()->pluck('id')->all())->toBe([$this->roomA->id]);
+});
+```
+
+Each fetched event has short keys to keep the response small: `k` is the event key (`"{source index}:{record key}"`,
+the index of the `EventSource` in `events()`), `r` the resource key as a string, `s` and `e` the start and end as UTC
+milliseconds (`'YYYY-MM-DD'` dates for all-day events, with `a: true`) and `t` the title.
+
+**Another tenant's IDs are treated as "not there", not as an error.** The scheduler does not throw an exception or
+answer with 403 or 404 when the browser sends the key of another tenant's event or resource. It behaves as if the
+record did not exist, so write your assertions like this:
+
+| What the browser sends | What happens |
+| --- | --- |
+| `warpSchedulerFetch` with another tenant's resource keys | Those events are left out of `events` |
+| `warpSchedulerMove`, `warpSchedulerRename`, `warpSchedulerSchedule`, `warpSchedulerMoveCard` with another tenant's event | Returns `['ok' => false]` and saves nothing |
+| `warpSchedulerTooltip` with another tenant's event | Returns `null` |
+| `mountAction('warpSchedulerOpen0', ['event' => '0:…'])` (or `warpSchedulerDelete0`, `warpSchedulerEditResource`) | The modal does not open: `mountedActions` stays `[]` |
+| A form that picks another tenant's resource | The form is not saved |
+
+```php
+it('does not let team A move team B\'s booking', function () {
+    $ms = fn (string $time): int => Carbon\Carbon::parse($time, 'UTC')->getTimestampMs();
+    $page = Livewire::test(Bookings::class);
+
+    expect($page->call('warpSchedulerMove', "0:{$this->theirs->id}", $ms('2026-10-07 03:00'), $ms('2026-10-07 04:00'), (string) $this->roomA->id)
+        ->effects['returns'][0]['ok'])->toBeFalse();
+
+    $page->call('mountAction', 'warpSchedulerOpen0', ['event' => "0:{$this->theirs->id}"])
+        ->assertSet('mountedActions', []);
+
+    expect($this->theirs->refresh()->room_id)->toBe($this->roomB->id);
+});
+```
+
+The page URL itself is Filament's: a user who is not a member of team B gets a 404 for `/app/{team-b}/bookings`
+(`$this->get(Bookings::getUrl(tenant: $this->teamB))->assertNotFound()`).
+
+To see what a tenant sees in a real browser, read the board with [`eventRects()`](#browser-tests-and-screen-readers-javascript)
+after `whenIdle()`.
 
 ### Actions
 
@@ -1196,6 +1323,88 @@ Schedule::command('warp-scheduler:renew-calendar-watches')->daily();
 ```
 
 Push notifications need a public `https` URL. Without one, the scheduled sync keeps calendars up to date.
+
+## Browser tests and screen readers (JavaScript)
+
+The board is drawn on a canvas, so the events are not elements you can click or read by themselves. The scheduler
+also puts them in the page for screen readers, automated checks and screen recordings.
+
+### The list of the events in the page
+
+Each event box on screen has a matching `<li>` in a hidden list (`.fi-warp-sch-event-layer`, `role="list"`) at the
+same place as the box. Its text is the title, then the subtitle, the date and time, and the resource, as the screen
+shows them (for example `Training, Delta, Nov 5, 14:30 – 15:30, Delta`). So:
+
+- Screen readers read every event on screen with its time and resource.
+- The browser's find (Cmd/Ctrl + F) finds the titles and highlights them on the board.
+- `element.innerText` and Playwright's `page.getByText('Training')` find the events.
+
+Each `<li>` also has `data-key` (the event key), `data-record-id`, `data-resource`, `data-start` and `data-end`
+(local time, see below). The list follows what is drawn: after a drag, an edit, a refresh, a zoom or a scroll, it is
+rebuilt shortly after the drawing, and events that are no longer drawn are removed. Only the events on screen are in
+the list (up to 600).
+
+The list does not take clicks (they go to the canvas). To click an event, use the position from `eventRects()`.
+
+### `eventRects()` and `whenIdle()`
+
+The engine is on the `.fi-warp-sch-stage` element as `warpScheduler`:
+
+```js
+const scheduler = document.querySelector('.fi-warp-sch-stage').warpScheduler
+
+await scheduler.whenIdle()
+
+scheduler.eventRects({ resource: '1', date: '2026-11-02' })
+// [{ key: '0:275', recordId: '275', resource: '1', resourceTitle: 'Van 1', title: 'Connelly\'s Café',
+//    subtitle: '#1 · 07:20', start: '2026-11-02T09:00', end: '2026-11-02T09:50', allDay: false,
+//    x: 1064, y: 420, w: 61, h: 48, centerX: 1094.5, centerY: 444 }]
+```
+
+- **`eventRects(filter = {})`** — the events drawn now. Every filter is optional: `resource` (the resource key; numbers
+  and strings both work), `date` (`'YYYY-MM-DD'`: events on that day in the scheduler's time zone, including ones that
+  start the day before), `key` (the event key), `recordId` (the record key) and `title` (the exact title).
+  - `start` and `end` are the wall-clock time in the scheduler's time zone (`timezone()`), as `'YYYY-MM-DDTHH:mm'`
+    without an offset — the same time the board shows, whatever the time zone of the browser. All-day events start
+    at `T00:00` and end at `T00:00` of the day after the last day.
+  - `x`, `y`, `w`, `h` are the box in viewport pixels, the same as `getBoundingClientRect()`, cut to the part that is
+    visible on the board (not under the resource column or the header). `centerX` and `centerY` are its center: with
+    Playwright, `page.mouse.click(rect.centerX, rect.centerY)` clicks that event.
+  - Events scrolled out of view are not returned. Scroll first (or go to another date with the arrows), wait with
+    `whenIdle()`, then call it again.
+  - An event that is drawn in several pieces (for example across two weeks in the month view) is returned once per
+    piece.
+- **`whenIdle({ timeout = 15000 } = {})`** — a promise that resolves when nothing is loading, saving or waiting to be
+  drawn, and the list of the events is up to date. It resolves `true`, or `false` when `timeout` milliseconds pass
+  first. Call it after anything that changes the board (opening the page, a drag, closing a modal, a zoom, a filter)
+  and before `eventRects()` or reading the list.
+
+A Playwright test that drags a booking to the next van and checks the result:
+
+```js
+const stage = page.locator('.fi-warp-sch-stage')
+const scheduler = (fn, arg) => stage.evaluate((el, arg) => fn(el.warpScheduler, arg), arg)
+
+await page.goto('/app/acme/dispatch')
+await stage.evaluate((el) => el.warpScheduler.whenIdle())
+
+const [stop] = await stage.evaluate((el) => el.warpScheduler.eventRects({ resource: '1', date: '2026-11-02', title: 'Connelly\'s Café' }))
+
+await page.mouse.move(stop.centerX, stop.centerY)
+await page.mouse.down()
+await page.mouse.move(stop.centerX, stop.centerY + 56, { steps: 10 })   // one row down
+await page.mouse.up()
+await stage.evaluate((el) => el.warpScheduler.whenIdle())
+
+const moved = await stage.evaluate((el, key) => el.warpScheduler.eventRects({ key }), stop.key)
+expect(moved[0].resource).toBe('2')
+await expect(page.getByText('Connelly\'s Café, ')).toContainText('Van 2')
+```
+
+The values in these examples are only examples; take the row height and keys from your own board.
+
+With several schedulers on one page, pick one with `document.querySelectorAll('.fi-warp-sch-stage')[n]`. Other
+properties of `warpScheduler` are internal and can change in any release; use only `eventRects()` and `whenIdle()`.
 
 ## Keyboard
 

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-06
+
+### Added
+
+- Instructions for AI coding assistants (Claude Code, Cursor, Codex) through [Laravel Boost](https://laravel.com/docs/boost):
+  a guideline that Boost adds to `CLAUDE.md` and `AGENTS.md`, and the `warp-scheduler-development` skill for building
+  boards and testing them. Select `qalainau/filament-warp-scheduler` in `php artisan boost:install`, or add it to
+  `"packages"` in `boost.json`. See [AI coding assistants (Laravel Boost)](README.md#ai-coding-assistants-laravel-boost).
+
+- `php artisan warp:assign-tenant "App\Models\Team" 1` gives the iCal subscription links and connected calendars that
+  have no tenant (saved before the app had tenancy) to one tenant. `--dry-run` only counts them. Rows that already have
+  a tenant are not touched. The same command also covers the tables of the other Warp plugins in the app.
+- `document.querySelector('.fi-warp-sch-stage').warpScheduler.eventRects({ resource, date })` returns the events drawn
+  now with their key, record key, resource, title, subtitle, start and end (the wall-clock time in the scheduler's time
+  zone, `'2026-11-02T09:00'`) and their box on the screen in viewport pixels, for browser tests and screen recordings.
+  `await warpScheduler.whenIdle()` waits until nothing is loading, saving or waiting to be drawn.
+- README: "Testing with tenancy" (another tenant's IDs are treated as "not there", not as an exception, and how to
+  check what a tenant sees) and "Browser tests and screen readers".
+
+### Changed
+
+- The screen reader list of the events on screen now reads the subtitle, the date and time and the resource after the
+  title (before, the time and resource were only in an `aria-label`, which many screen readers skip for list items).
+  So `innerText` and Playwright's `getByText()` find them too. Each item also has `data-key`, `data-record-id`,
+  `data-resource`, `data-start` and `data-end`.
+
 ## [1.7.1] - 2026-11-02
 
 ### Fixed
