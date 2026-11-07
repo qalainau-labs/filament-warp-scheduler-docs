@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-11-07
+
+### Fixed
+
+- A save callback that returns `false` is refused like a `ChangeRejected` without a message: the change is rolled back,
+  the user sees "The change was not saved.", the event jumps back (or the form stays open) and no hooks run. This
+  covers `moveUsing()`, `createUsing()`, `updateUsing()`, `deleteUsing()`, `unscheduleUsing()` and `onExternalDrop()`.
+  Before, `false` from `moveUsing()` and the others was taken as success, so the board showed a change that was not
+  saved. `createUsing()` returning `false` was an error.
+- A new record that `moveUsing()` (a copy, an occurrence of a recurring event), `createUsing()` or `onExternalDrop()`
+  returns without saving it is refused the same way, and anything the callback saved is rolled back. Before, a copy
+  that was never saved appeared on the board until the next reload.
+- The timeline, the Gantt chart and the other scrolling views no longer flicker without end when the content is only a
+  few pixels taller than the box, with scrollbars that take up space (Windows, or "Always show scrollbars" on macOS).
+  The scrollbars used to appear and disappear on every frame. The scrolling area is now always exactly as tall as the
+  content. If you added `scrollbar-gutter: stable` to `.fi-warp-sch-scroller` as a workaround, you can remove it.
+
+### Documentation
+
+- `$start` and `$end` in `moveUsing()`, `onExternalDrop()` and `onAdopt()` are in the scheduler's time zone, and
+  Eloquent saves them without converting: the `BookingService` example in "Saving through your own code" now converts
+  them to `app.timezone` (saving them as they are put a booking 9 hours late on a Tokyo board in a UTC app).
+- The times of `warpSchedulerFetch` and `warpSchedulerMove` in tests are Unix timestamps in milliseconds, written in
+  the scheduler's time zone (the README and the Boost skill said "wall-clock times written as UTC milliseconds").
+- The Boost guidelines and skill: returning `false` or an unsaved record, the time zone of `$start` and `$end`, and
+  hiding records that `deleteUsing()` only marks as cancelled with `modifyQueryUsing()`.
+
 ## [1.9.0] - 2026-11-06
 
 ### Added

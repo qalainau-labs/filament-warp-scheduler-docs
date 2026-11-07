@@ -855,8 +855,13 @@ it('only shows team A its own rooms and bookings', function () {
 ```
 
 Each fetched event has short keys to keep the response small: `k` is the event key (`"{source index}:{record key}"`,
-the index of the `EventSource` in `events()`), `r` the resource key as a string, `s` and `e` the start and end as UTC
-milliseconds (`'YYYY-MM-DD'` dates for all-day events, with `a: true`) and `t` the title.
+the index of the `EventSource` in `events()`), `r` the resource key as a string, `s` and `e` the start and end as Unix
+timestamps in milliseconds (`'YYYY-MM-DD'` dates for all-day events, with `a: true`) and `t` the title.
+
+The times you pass to `warpSchedulerFetch` and `warpSchedulerMove`, and get back, are moments, not wall-clock times.
+Write them with the scheduler's time zone (`timezone()`, Filament's by default): `Carbon::parse('2026-10-07 09:00',
+'Asia/Tokyo')->getTimestampMs()`. The examples use `'UTC'` because a new app runs the app, Filament and the scheduler
+in UTC.
 
 **Another tenant's IDs are treated as "not there", not as an error.** The scheduler does not throw an exception or
 answer with 403 or 404 when the browser sends the key of another tenant's event or resource. It behaves as if the
@@ -936,12 +941,12 @@ class BookingService
 
     public function reschedule(Booking $booking, CarbonInterface $start, CarbonInterface $end, string $staffId): Booking
     {
-        return $this->save($booking, ['staff_id' => $staffId, 'starts_at' => $start, 'ends_at' => $end]);
+        return $this->save($booking, ['staff_id' => $staffId, 'starts_at' => $this->appTime($start), 'ends_at' => $this->appTime($end)]);
     }
 
     public function copy(Booking $original, CarbonInterface $start, CarbonInterface $end, string $staffId): Booking
     {
-        return $this->save($original->replicate(), ['staff_id' => $staffId, 'starts_at' => $start, 'ends_at' => $end]);
+        return $this->save($original->replicate(), ['staff_id' => $staffId, 'starts_at' => $this->appTime($start), 'ends_at' => $this->appTime($end)]);
     }
 
     public function cancel(Booking $booking): void
@@ -960,6 +965,14 @@ class BookingService
         $booking->save();
 
         return $booking;
+    }
+
+    /**
+     * The scheduler passes times in its own time zone; the database holds wall-clock times in app.timezone.
+     */
+    protected function appTime(CarbonInterface $time): CarbonInterface
+    {
+        return $time->copy()->setTimezone(config('app.timezone'));
     }
 }
 ```
@@ -987,12 +1000,18 @@ Since `deleteUsing()` here only marks the booking as cancelled, hide cancelled b
 | `createUsing()` | Saving the create modal, and each event of an `.ics` import | `array $data`: the form values, including the start, end and resource of the selected slot | The new record (required) |
 | `updateUsing()` | Saving the edit modal; renaming in place; moving a card to another board column; dragging a booked card back to a column that takes it off the timeline (unless `unscheduleUsing()` is set) | `Model $record`, `array $data`: the form values, or only the changed columns (the title, the stage, or the start and end set to `null`) | Nothing needed |
 | `deleteUsing()` | The delete action, from the context menu or the quick-info popup, and the Delete key | `Model $record` | Nothing needed |
-| `moveUsing()` | Every change of time or resource: dragging, resizing, moving with the keyboard, Alt-drag copies, copy and paste, moving several selected events together, successors moved by Gantt dependencies, and placing an event from the unscheduled pool or the board | See below | Nothing needed, unless you saved a different record than `$record` (for example a copy made by your service): then return that record |
+| `moveUsing()` | Every change of time or resource: dragging, resizing, moving with the keyboard, Alt-drag copies, copy and paste, moving several selected events together, successors moved by Gantt dependencies, and placing an event from the unscheduled pool or the board | See below | Nothing needed, unless you saved a different record than `$record` (for example a copy made by your service): then return that record. If `$record` was a new record and you neither saved it nor returned yours, the change is refused |
 
 `moveUsing()` receives these arguments, by name:
 
 - `$record`: the event. For a copy it is an unsaved copy of the original event.
-- `$start` and `$end`: the new start and end, in the scheduler's time zone. The end is exclusive.
+- `$start` and `$end`: the new start and end, in the scheduler's time zone (`timezone()`). The end is exclusive.
+  Eloquent saves a date's wall-clock time as it is, without converting it, so convert them to the app time zone
+  before you save them: `$start->copy()->setTimezone(config('app.timezone'))`, as `appTime()` does in the example. When
+  the scheduler shows the app's time zone (the default in a new app), this changes nothing; when it shows another one
+  (say Asia/Tokyo for an app in UTC), saving `$start` as it is puts the booking 9 hours later. The same is true for
+  `$start` and `$end` in `onExternalDrop()` and `onAdopt()`. The `$data` of `createUsing()` and `updateUsing()` is
+  already in the app time zone.
 - `$resource`: the key of the resource the event was dropped on.
 - `$from`: the key of the row the event was dragged from. It only matters for events shared by several resources
   (`resourcesRelationship()`), where it tells which assignment to move.
@@ -1028,7 +1047,11 @@ What else happens depends on where the change came from:
 `ChangeRejected` can also be thrown from `unscheduleUsing()`, `onExternalDrop()` and `onAdopt()`.
 
 A model event that stops the save (a `saving`, `creating` or `updating` listener returning `false`) is treated the
-same way: the change is refused with the message "The change was not saved.", and no hooks run.
+same way: the change is refused with the message "The change was not saved.", and no hooks run. So is a callback that
+returns `false` (for example `fn (Booking $record, array $data) => $record->update($data)` when the update was stopped),
+or one that returns a new record without saving it (`createUsing()`, `moveUsing()` for a copy, `onExternalDrop()`).
+Return nothing, `true` or the saved record for a change that went through. To tell the user why a change was refused,
+throw `ChangeRejected` instead of returning `false`.
 
 #### Preventing double bookings when two people book at the same moment
 
