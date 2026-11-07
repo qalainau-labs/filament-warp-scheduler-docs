@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- `useWarpDatePicker()` (added in 1.9.2) needs Warp DatePicker, which is not released yet; the README says so.
+
+## [1.9.2] - 2026-11-07
+
+### Fixed
+
+- Renaming an event in place (double-click on its title) no longer ends when the board is scrolled until the event is
+  out of view. The input used to be hidden with `visibility: hidden`, which made the browser take the focus away, so
+  the half-typed title was saved and the input closed. It now becomes transparent and keeps the focus, and shows
+  again on the event when it is scrolled back; Enter saves and Escape cancels as before.
+
+### Added
+
+- `useWarpDatePicker()`: with Warp DatePicker installed, the board uses its calendar — public holidays and company days off named and shaded, working weekdays and weekly business hours, availability from the business hours of each day (none on days off, without breaks, shorter before holidays, in the calendar's time zone, per resource with a closure) and half days off as named blocked time. Rows of the availability table still come first.
+
 ## [1.9.1] - 2026-11-07
 
 ### Fixed

@@ -273,7 +273,7 @@ $scheduler
     ->holidays(fn (CarbonImmutable $from, CarbonImmutable $to): array => Holiday::between($from, $to)->pluck('name', 'date')->all());
 ```
 
-Holidays are shaded like weekends and named in the month, week and year views.
+Holidays are shaded like weekends and named in the month, week and year views. With Warp DatePicker, `useWarpDatePicker()` brings its holidays, company days off and business hours instead (see [Holidays and business hours from Warp DatePicker](#holidays-and-business-hours-from-warp-datepicker)).
 
 Events shared by several resources (a meeting with many rooms) use a `belongsToMany` relationship instead of a column.
 The event is drawn on every resource; dragging one row moves that assignment, and the time of all of them:
@@ -1262,6 +1262,27 @@ $scheduler
 ```
 
 Weekly hours and date exceptions per resource (or for all resources, such as holidays) can also be stored in `warp_scheduler_availabilities`, and blocked time in `warp_scheduler_blocks`. To compute availability yourself, for example with `spatie/opening-hours` or `laraveljutsu/zap`, return intervals from `availabilityUsing(fn (Model $resource, CarbonImmutable $from, CarbonImmutable $to) => [[$start, $end], ...])`.
+
+### Holidays and business hours from Warp DatePicker
+
+> Warp DatePicker is not released yet (coming soon). Until you install it, nothing changes: the board does not use it
+> unless you call `useWarpDatePicker()`.
+
+With [Warp DatePicker](https://warpui.com) installed, the board can use the same calendar as your date fields — public holidays, company days off and business hours, set once on the panel:
+
+```php
+$scheduler->useWarpDatePicker();                                            // the panel's calendar
+$scheduler->useWarpDatePicker('osaka');                                     // one place of FilamentWarpDatePickerPlugin::calendars()
+$scheduler->useWarpDatePicker(fn (?Room $resource): ?string => $resource?->site_key);   // a calendar per resource
+```
+
+- Public holidays and company days off are shaded and named in the month, week and year views, unless you set `holidays()`.
+- The working weekdays come from the calendar unless you set `workingDays()`, and the weekly business hours (for shading and `hideNonWorkingHours()`) unless you set `businessHours()` — only when the calendar is in the scheduler's time zone, so the shading never lands on the wrong hours.
+- **Availability** (`WithinAvailability`, free slots, utilization): on a day without rows in `warp_scheduler_availabilities`, a resource is available during the calendar's business hours of that day — none on holidays and company days off, without the lunch break, shorter before a holiday, and in the calendar's own time zone (a Los Angeles warehouse is 8:00–17:00 Los Angeles time on a board shown in New York time). If the calendar has no business hours, business days use `businessHours()` (or the whole day). Rows of the table still come first, so a one-off Saturday shift stays a table row.
+- **Half days off** of the calendar (a stocktaking afternoon) are blocked time with their name, for every resource of that calendar (`NoBlockedTime` refuses them).
+- With a closure, `$resource` is `null` for what belongs to the whole board (the named holidays and working weekdays); return `null` there for the panel's calendar.
+
+Warp DatePicker is not a dependency of Warp Scheduler: without it, `useWarpDatePicker()` stops with a message saying to install it.
 
 ### Utilization
 
