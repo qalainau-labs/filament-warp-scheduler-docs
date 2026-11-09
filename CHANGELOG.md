@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-11-10
+
+### Fixed
+
+- The timeline, the Gantt chart and the other scrolling views no longer flicker without end when the board's height is
+  not a whole number of pixels, which is common with display scaling such as 125% or 150% on Windows. The browser
+  rounds the height up (896.6px to 897px), so the content came out a fraction of a pixel too tall, and the scrollbars
+  appeared and disappeared on every frame from the first render. Clicking the zoom again or resizing the window
+  stopped it. The board now uses the exact height, and content that is less than a pixel taller than the box no longer
+  makes it scroll. 1.9.1 fixed the same flicker for whole-pixel heights only. If you added `scrollbar-gutter: stable`
+  to `.fi-warp-sch-scroller` as a workaround, you can remove it.
+
 ## [1.10.0] - 2026-11-09
 
 ### Fixed
