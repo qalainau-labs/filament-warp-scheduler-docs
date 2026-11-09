@@ -310,12 +310,15 @@ $scheduler
     ->exportable()                 // CSV and XLSX of the visible range (or ->exportable(['csv']))
     ->icsImport()                  // upload an .ics file into a resource
     ->eventsUsing(fn (CarbonImmutable $start, CarbonImmutable $end, array $resources): array => $api->events($start, $end))
-    ->resourceSchema([TextInput::make('name')->required()]);  // add, edit and delete resources on the board
+    ->resourceSchema([TextInput::make('name')->required()])  // add, edit and delete resources on the board
+    ->createResourceIcon(Heroicon::BuildingOffice);            // the icon of the toolbar's add button (default: a plus)
 ```
 
 `eventsUsing()` returns arrays with `id`, `resource`, `start`, `end`, `title` and optionally `allDay`, `color` and
 `subtitle`; those events are read-only. With `resourceSchema()`, click a resource name to edit it, right-click it to
-delete it, and use the toolbar button to add one. Model policies apply.
+delete it, and use the toolbar button to add one. Model policies apply. The add button shows a plus; give it an icon
+that fits your resources with `createResourceIcon()`: `Heroicon::UserPlus` for people, `Heroicon::BuildingOffice` for
+rooms, `Heroicon::Truck` for vans.
 
 ### Views and time
 
@@ -1295,8 +1298,20 @@ Warp DatePicker is not a dependency of Warp Scheduler: without it, `useWarpDateP
 ```php
 $scheduler->utilization();
 
-EventSource::make(Absence::class)->countsTowardsUtilization(false);
+EventSource::make(Absence::class)
+    ->countsTowardsUtilization(false)  // not booked time
+    ->reducesAvailability();           // and the person cannot work then
 ```
+
+Utilization is the booked time divided by the available time (the working hours from the availability, times the
+capacity of `NoOverlap`; the whole day when no working hours are set).
+
+- An all-day event counts as the available time of its day: a whole-day job for someone who works 08:00–18:00 is
+  10 hours, not 24.
+- `countsTowardsUtilization(false)` leaves the events of a source out of the booked time.
+- `reducesAvailability()` takes their time off the available time (vacation, sick leave). On a day off the person has
+  no available time, so the row shows no percentage for that day; in a week the other days still count. Bookings on
+  that day still count as booked time, so a week with bookings during a vacation shows a higher percentage.
 
 ### Hooks
 

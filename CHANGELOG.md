@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-11-09
+
+### Fixed
+
+- The menu that asks which events of a repeating event to move now says what it asks ("This event repeats. Change
+  which events?") and has a Cancel item. Closing it with Escape or a click outside still cancels the move.
+- Long items of the right-click menu wrap onto a second line instead of being cut off with "…".
+- A wide event that runs past the right edge of the timeline shows its badge (such as "Urgent") at the visible right
+  edge. The badge used to be drawn at the end of the event, out of view.
+- Gantt bars that start before the visible part of the chart show their title from the left edge of the chart
+  ("Requirements" instead of "ments").
+- Utilization counts an all-day event as the available time of its day, not 24 hours. A whole-day job for someone who
+  works 08:00–18:00 used to show 240% for the day; it now shows 100%. Without working hours, a day is still 24 hours.
+
+### Added
+
+- `createResourceIcon()`: the icon of the toolbar button that adds a resource. It is a plus by default (it was a
+  person with a plus, which looked like "add a person" on boards of rooms or vans). Use `Heroicon::UserPlus` to keep
+  the old icon on a board of people.
+- `EventSource::reducesAvailability()`: the time of these events (vacation, sick leave) is taken off the available
+  time for utilization, so a day off no longer counts as a free working day. Without it nothing changes.
+
 ### Documentation
 
 - `useWarpDatePicker()` (added in 1.9.2) needs Warp DatePicker, which is not released yet; the README says so.
