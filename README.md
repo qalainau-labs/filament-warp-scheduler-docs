@@ -279,7 +279,7 @@ $scheduler
     ->holidays(fn (CarbonImmutable $from, CarbonImmutable $to): array => Holiday::between($from, $to)->pluck('name', 'date')->all());
 ```
 
-Holidays are shaded like weekends and named in the month, week and year views. With Warp DatePicker, `useWarpDatePicker()` brings its holidays, company days off and business hours instead (see [Holidays and business hours from Warp DatePicker](#holidays-and-business-hours-from-warp-datepicker)).
+Holidays and the days of the week outside `workingDays()` (Saturday and Sunday by default) are shaded the same way in the timeline, week, day and month views, and holidays are named in the month, week and year views. With Warp DatePicker, `useWarpDatePicker()` brings its holidays, company days off and business hours instead (see [Holidays and business hours from Warp DatePicker](#holidays-and-business-hours-from-warp-datepicker)).
 
 Events shared by several resources (a meeting with many rooms) use a `belongsToMany` relationship instead of a column.
 The event is drawn on every resource; dragging one row moves that assignment, and the time of all of them:
@@ -343,7 +343,7 @@ $scheduler
     ->slotHeight(20)                // time grid slot height, px
     ->slotWidth(64)                 // minimum width of the finest timeline tick (slotDuration in the day and week zooms), px
     ->scrollTime('08:00')           // where to scroll when today is not in range
-    ->workingDays([1, 2, 3, 4, 5])  // default: days with business hours, else Monday to Friday
+    ->workingDays([1, 2, 3, 4, 5])  // default: days with business hours, else Monday to Friday; the other days are shaded
     ->hideNonWorkingDays()          // or ->hiddenDays([0, 6])
     ->visibleHours('07:00', '21:00') // or ->hideNonWorkingHours() to use the business hours
     ->headerRows([HeaderRow::Month, HeaderRow::Week, HeaderRow::Day])

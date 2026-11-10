@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-11-10
+
+### Fixed
+
+- Days off are now shaded the same way in every view, following `workingDays()` (or the working days of the calendar
+  with `useWarpDatePicker()`). The month, week and day views shaded only holidays, so Saturday and Sunday looked like
+  working days, and the timeline always shaded Saturday and Sunday, even when Saturday was a working day.
+
 ## [1.10.1] - 2026-11-10
 
 ### Fixed
