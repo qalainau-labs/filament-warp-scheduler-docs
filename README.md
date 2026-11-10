@@ -1136,6 +1136,8 @@ Any element can be dragged onto a scheduler that has `onExternalDrop()`:
 
 `data-warp-scheduler-draggable` holds a JSON object (passed to `onExternalDrop()` as `$data`) or any other value, such
 as an ID (passed as `['value' => ...]`). In Blade, escape the JSON so its quotes cannot end the attribute: `{{ json_encode($data) }}`.
+`$data` (and the `$event` of `onAdopt()`) comes from the browser, so treat it like request input: look records up with
+a query scoped to the user and tenant, check your policy, and do not pass the array to `create()` or `fill()` as it is.
 
 Filament 5 tables have no row attributes, so add the attributes to a column with `extraAttributes()`; the cell becomes
 the thing to drag. Filament does not HTML-escape attribute values (it only turns `"` into `\"`), so escape the JSON

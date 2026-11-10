@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.3] - 2026-11-10
+
+### Security
+
+- An event color read from a record (`EventSource::color()`) can no longer add CSS to the cards of the unscheduled
+  pool and the board. A color that is not a color name or a CSS color (for example one containing `;`) is ignored.
+- The README now says that the `$data` of `onExternalDrop()` and the `$event` of `onAdopt()` come from the browser and
+  must be checked like request input.
+
 ## [1.10.2] - 2026-11-10
 
 ### Fixed
