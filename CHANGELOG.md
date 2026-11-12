@@ -5,7 +5,15 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.10.4] - 2026-11-12
+
+### Changed
+
+- Now requires Filament 5.9 or later (was 5.0). Parts of the plugin did not work on older 5.x versions, which were never tested. The tests now also run on the lowest supported versions before each release.
+
+### Fixed
+
+- Calendar sync: pulling a change for an event whose link has no last-synced time no longer fails with "Method Carbon\\CarbonImmutable::minValue does not exist".
 
 ## [1.10.3] - 2026-11-10
 

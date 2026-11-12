@@ -35,6 +35,18 @@ class StaffSchedule extends SchedulerPage
 }
 ```
 
+## Contents
+
+- [Why](#why)
+- [Features](#features)
+- [Requirements](#requirements): [Tested on](#tested-on)
+- [Installation](#installation): [AI coding assistants (Laravel Boost)](#ai-coding-assistants-laravel-boost)
+- [Usage](#usage): [Where to put a scheduler](#where-to-put-a-scheduler) · [Resources](#resources) · [Events](#events) · [Import, export and other data](#import-export-and-other-data) · [Views and time](#views-and-time) · [Dependent fields in the event form](#dependent-fields-in-the-event-form) · [Filters](#filters) · [Permissions, tenancy and read-only mode](#permissions-tenancy-and-read-only-mode) · [Tenancy](#tenancy) · [Actions](#actions) · [Saving through your own code](#saving-through-your-own-code) · [Search, drops from outside and other schedulers](#search-drops-from-outside-and-other-schedulers) · [Unscheduled pool](#unscheduled-pool) · [Board (kanban)](#board-kanban) · [Recurring events](#recurring-events) · [Availability and conflicts](#availability-and-conflicts) · [Holidays and business hours from Warp DatePicker](#holidays-and-business-hours-from-warp-datepicker) · [Utilization](#utilization) · [Hooks](#hooks) · [Gantt](#gantt) · [iCal and printing](#ical-and-printing) · [Calendar sync](#calendar-sync)
+- [Browser tests and screen readers (JavaScript)](#browser-tests-and-screen-readers-javascript): [The list of the events in the page](#the-list-of-the-events-in-the-page) · [`eventRects()` and `whenIdle()`](#eventrects-and-whenidle)
+- [Keyboard](#keyboard)
+- [Limitations](#limitations)
+- [Troubleshooting](#troubleshooting)
+
 ## Why
 
 Measured on the demo app with 5,148 timeline rows (5,000 staff in three levels of groups) and 200,000 bookings, in Chrome:
@@ -79,7 +91,7 @@ Only the rows and the time range on screen are drawn, and events are loaded per 
 
 - PHP 8.3+
 - Laravel 12 or 13
-- Filament 5.x (Livewire 4)
+- Filament 5.9 or later (Livewire 4)
 - SQLite, MySQL 8.0+, MariaDB 10.11+ or PostgreSQL 14+
 - A queue worker if you use calendar sync
 
