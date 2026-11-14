@@ -5,6 +5,40 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-11-13
+
+### Added
+
+- Drag an event from the timeline onto the unscheduled pool to take it off the timeline (`warpSchedulerUnschedule`).
+  The same rules as moving decide whether it may go back, `EventSource::unscheduleUsing()` is used when set, and
+  repeating events are refused with a reason. On by default whenever the pool is shown, for event sources with
+  `unscheduleUsing()` or with nullable start and end columns; `returnToPool(false)` turns it off. The browser dispatches `warp-scheduler:unscheduled`.
+- `boardWidth('280px')` sets the width of the board beside the timeline (`BoardLayout::Beside`). Only CSS lengths are
+  taken.
+- README: "Testing drags, the pool and the board" with feature tests for `warpSchedulerSchedule`,
+  `warpSchedulerUnschedule` and `warpSchedulerMoveCard`, and a note on unique columns copied by `replicate()` when one
+  occurrence of a recurring event is changed.
+- Board swimlanes: `swimlanes('owner_id')` splits the board into a lane per value of a column, or per resource when
+  the column is the resource column, with an Unassigned lane. Dragging a card to another lane writes that column (for
+  a card on the timeline with resource lanes, it moves the event to that resource and checks the conflict rules).
+  Lanes fold and stay folded in the browser. `canMoveCard()` and `afterCardMoved()` also receive `$fromLane` and
+  `$toLane`. Off by default.
+- Allowed moves between board columns: `transitions(['ready' => ['booked'], ...])`. While a card is dragged, the
+  columns it may not move to are dimmed, and the server refuses such moves, including a card dropped on the timeline
+  when its column may not move to the `scheduled()` column. Off by default.
+- Drafts: with `batchSave()`, dragged and resized events stay drafts with a dashed outline until **Save all** saves
+  them in one transaction (through the same checks as `moveEvents()`) or **Undo all** puts them back. If someone else
+  changed one of the events in the meantime, nothing is saved and their change is not overwritten. Occurrences of
+  repeating events and Alt copies are still saved at once. Off by default.
+- A second time scale: `secondaryTimezone('America/New_York')` adds a second column of hours to the week and day views
+  and a row under the hours of the timeline. `resourceTimezone('timezone')` shades each resource's night in its own
+  time zone. Both only change what is drawn; saved times are unchanged. Off by default.
+- Finding a free slot: `freeSlotSearch()` adds a panel to search up to three free times by length, resources (all
+  together or any one), dates, hours and weekdays, with the same rules as dragging, and opens the create form with
+  the chosen time and resources. With an Anthropic API key, a sentence ("a free hour next week in the afternoon for
+  Tanaka and room A") can be turned into the conditions by Claude; the sentence and the names of the resources on
+  screen are sent to Anthropic, events are not. Off by default; `freeSlotSearch(ai: false)` hides the sentence field.
+
 ## [1.10.4] - 2026-11-12
 
 ### Changed

@@ -41,7 +41,7 @@ class StaffSchedule extends SchedulerPage
 - [Features](#features)
 - [Requirements](#requirements): [Tested on](#tested-on)
 - [Installation](#installation): [AI coding assistants (Laravel Boost)](#ai-coding-assistants-laravel-boost)
-- [Usage](#usage): [Where to put a scheduler](#where-to-put-a-scheduler) · [Resources](#resources) · [Events](#events) · [Import, export and other data](#import-export-and-other-data) · [Views and time](#views-and-time) · [Dependent fields in the event form](#dependent-fields-in-the-event-form) · [Filters](#filters) · [Permissions, tenancy and read-only mode](#permissions-tenancy-and-read-only-mode) · [Tenancy](#tenancy) · [Actions](#actions) · [Saving through your own code](#saving-through-your-own-code) · [Search, drops from outside and other schedulers](#search-drops-from-outside-and-other-schedulers) · [Unscheduled pool](#unscheduled-pool) · [Board (kanban)](#board-kanban) · [Recurring events](#recurring-events) · [Availability and conflicts](#availability-and-conflicts) · [Holidays and business hours from Warp DatePicker](#holidays-and-business-hours-from-warp-datepicker) · [Utilization](#utilization) · [Hooks](#hooks) · [Gantt](#gantt) · [iCal and printing](#ical-and-printing) · [Calendar sync](#calendar-sync)
+- [Usage](#usage): [Where to put a scheduler](#where-to-put-a-scheduler) · [Resources](#resources) · [Events](#events) · [Import, export and other data](#import-export-and-other-data) · [Views and time](#views-and-time) · [Dependent fields in the event form](#dependent-fields-in-the-event-form) · [Filters](#filters) · [Permissions, tenancy and read-only mode](#permissions-tenancy-and-read-only-mode) · [Tenancy](#tenancy) · [Actions](#actions) · [Saving through your own code](#saving-through-your-own-code) · [Search, drops from outside and other schedulers](#search-drops-from-outside-and-other-schedulers) · [Saving moves together (drafts)](#saving-moves-together-drafts) · [Finding a free slot](#finding-a-free-slot) · [Unscheduled pool](#unscheduled-pool) · [Board (kanban)](#board-kanban) · [Testing drags, the pool and the board](#testing-drags-the-pool-and-the-board) · [Recurring events](#recurring-events) · [Availability and conflicts](#availability-and-conflicts) · [Holidays and business hours from Warp DatePicker](#holidays-and-business-hours-from-warp-datepicker) · [Utilization](#utilization) · [Hooks](#hooks) · [Gantt](#gantt) · [iCal and printing](#ical-and-printing) · [Calendar sync](#calendar-sync)
 - [Browser tests and screen readers (JavaScript)](#browser-tests-and-screen-readers-javascript): [The list of the events in the page](#the-list-of-the-events-in-the-page) · [`eventRects()` and `whenIdle()`](#eventrects-and-whenidle)
 - [Keyboard](#keyboard)
 - [Limitations](#limitations)
@@ -64,11 +64,11 @@ Only the rows and the time range on screen are drawn, and events are loaded per 
 
 ![A shift board with avatars and a list of people to drag onto shifts](https://raw.githubusercontent.com/qalainau-labs/filament-warp-scheduler-docs/main/art/shift-board.png)
 
-- **Views**: resource timeline (day, week, month, quarter and year zoom), resource day and week views (by resource or by date), week, work week, day, N-day, month, month agenda, year and list views, and a Gantt chart. Each view and each timeline zoom can have its own slot size, row height, visible hours and days, and the tabs can be renamed from PHP. The week and month zooms can stack each day's events in time order as full-width blocks, so a busy route stays readable with Monday to Friday on one screen.
+- **Views**: resource timeline (day, week, month, quarter and year zoom), resource day and week views (by resource or by date), week, work week, day, N-day, month, month agenda, year and list views, and a Gantt chart. Each view and each timeline zoom can have its own slot size, row height, visible hours and days, and the tabs can be renamed from PHP. The week and month zooms can stack each day's events in time order as full-width blocks, so a busy route stays readable with Monday to Friday on one screen. A second time scale for another time zone, and each person's night shaded in their own time zone.
 - **Built for large boards**: canvas rendering with vertical and horizontal virtualization, collapsible nested resource groups, lazy loading of events and placeholders while they load.
-- **Drag and drop**: move events in time and across resources, copy with Alt, resize from either edge, select several with Ctrl/Cmd+click and drag them together, copy and paste, rename in place, and create events by selecting a range. Changes appear at once and are saved on the server, which checks read-only mode, locked events and your model policies. Refused changes roll back with a notification.
-- **Board (kanban)**: show the same records in columns by stage above or beside the timeline. Drag a card to another column to change its stage, onto a resource to schedule it, or drag an event from the timeline back to the board to take it off the timeline. WIP limits, the days each card has waited, and columns built from your own enum.
-- **Drop from anywhere**: drop unscheduled records from a pool, rows from a Filament table or any element on the page, people from a side list onto shifts, or events from another scheduler. Book a request into the first free slot with one click.
+- **Drag and drop**: move events in time and across resources, copy with Alt, resize from either edge, select several with Ctrl/Cmd+click and drag them together, copy and paste, rename in place, and create events by selecting a range. Changes appear at once and are saved on the server, which checks read-only mode, locked events and your model policies. Refused changes roll back with a notification. With `batchSave()`, moves stay drafts until you save them all at once or undo them all.
+- **Board (kanban)**: show the same records in columns by stage above or beside the timeline. Drag a card to another column to change its stage, onto a resource to schedule it, or drag an event from the timeline back to the board to take it off the timeline. WIP limits, the days each card has waited, columns built from your own enum, swimlanes per owner and the moves allowed between columns.
+- **Drop from anywhere**: drop unscheduled records from a pool, rows from a Filament table or any element on the page, people from a side list onto shifts, or events from another scheduler. Book a request into the first free slot with one click, or find three free times for a length, people and rooms, days and hours, typed as a sentence for AI or chosen in a form.
 - **Your content**: subtitles, icons, badges, avatars and solid, outline or dashed styles on events; server-rendered tooltips and a quick-info popup; resource avatars, descriptions and extra columns; holidays, prices per day and labelled blocked time; shifts as header rows.
 - **Filament actions**: each event source with a schema gets create, edit and delete actions in Filament modals. Add your own actions to the event context menu with `eventActions()`, and add, edit or delete resources on the board.
 - **Recurring events**: RFC 5545 rules expanded on the server for the visible range, with the wall-clock time kept across daylight saving changes. Edit or delete one occurrence, this and following, or the whole series. `RecurrenceInput` adds a repeat section to your form, including the nth weekday of a month and chosen months.
@@ -600,6 +600,33 @@ $scheduler->timeFormat('h:mm A');   // 7:20 AM, 7:05 PM
   clocks change.
 - `null` (the default) keeps the locale's own format.
 
+#### Two time zones and each resource's time zone
+
+```php
+$scheduler
+    ->timezone('Asia/Tokyo')
+    ->secondaryTimezone('America/New_York')          // a second time scale
+    ->resourceTimezone('timezone');                  // a column of the resource model, e.g. "Europe/London"
+```
+
+![A week view with times in Tokyo and New York, and a timeline that shades each person's night](https://raw.githubusercontent.com/qalainau-labs/filament-warp-scheduler-docs/main/art/time-zones.png)
+
+- `secondaryTimezone(string|Closure|null $timezone, string|Closure|null $label = null, string|Closure|null $primaryLabel = null)`:
+  the week, day and resource day views get a second column of hours on the left, and the timeline gets a row under
+  the hours (only when its lowest header row shows hours or minutes). The names above them default to the city of
+  each time zone ("New York", "Tokyo"); pass `label` and `primaryLabel` to name them yourself. Time zones that are
+  half an hour apart show minutes ("5:30 AM"). In the week views, the second column follows the clock change of the
+  first day on screen.
+- `resourceTimezone(string|Closure|null $timezone, string $nightStart = '22:00', string $nightEnd = '07:00')`: each
+  resource's night, from `nightStart` to `nightEnd` in its own time zone, is shaded on its timeline row and in its
+  column of the resource day and week views, so you can see who is asleep before you book a call. Give a column of
+  the resource model or `fn (Model $resource): ?string => ...`. Resources without a time zone, or with a name PHP does
+  not know (`Asia/Tokyo` is known, `+09:00` is not), are not shaded. The night hours must be written as `HH:MM`, or an
+  `InvalidArgumentException` is thrown.
+- Both only change what is drawn. Events are still saved and shown in the scheduler's `timezone()`, dragging snaps
+  as before, and the conflict rules do not look at the shading.
+- An unknown second time zone, or the same as `timezone()`, is ignored.
+
 ### Dependent fields in the event form
 
 The create and edit modals are ordinary Filament forms, so dependent ("cascading") fields work as usual:
@@ -891,7 +918,7 @@ record did not exist, so write your assertions like this:
 | What the browser sends | What happens |
 | --- | --- |
 | `warpSchedulerFetch` with another tenant's resource keys | Those events are left out of `events` |
-| `warpSchedulerMove`, `warpSchedulerRename`, `warpSchedulerSchedule`, `warpSchedulerMoveCard` with another tenant's event | Returns `['ok' => false]` and saves nothing |
+| `warpSchedulerMove`, `warpSchedulerRename`, `warpSchedulerSchedule`, `warpSchedulerUnschedule`, `warpSchedulerMoveCard` with another tenant's event | Returns `['ok' => false]` and saves nothing |
 | `warpSchedulerTooltip` with another tenant's event | Returns `null` |
 | `mountAction('warpSchedulerOpen0', ['event' => '0:…'])` (or `warpSchedulerDelete0`, `warpSchedulerEditResource`) | The modal does not open: `mountedActions` stays `[]` |
 | A form that picks another tenant's resource | The form is not saved |
@@ -1130,6 +1157,27 @@ They share the scheduler's transaction, so either all of them are saved or, if o
 - The series of recurring events (the rule and the skipped or changed occurrences) is stored in the plugin's own
   tables. If your app manages series itself, store each occurrence as a record of its own instead, with a series
   identifier in your own columns, and add actions such as "Move this and following" with `eventActions()`.
+- Some changes create the new record by copying an existing one with Eloquent's `replicate()`: changing one
+  occurrence of a recurring event (or "this and following"), an Alt-drag copy and a pasted copy. `replicate()` copies
+  every column except the primary key and the timestamps, so a column that must be unique, such as an order number,
+  is copied too and the insert fails on the unique index. Clear or renew it in the model's `replicating` event:
+
+  ```php
+  class Booking extends Model
+  {
+      protected static function booted(): void
+      {
+          // Warp Scheduler copies a booking for a changed occurrence and for copies
+          static::replicating(function (Booking $copy): void {
+              $copy->number = null;
+          });
+
+          static::creating(function (Booking $booking): void {
+              $booking->number ??= Booking::nextNumber();
+          });
+      }
+  }
+  ```
 
 ### Search, drops from outside and other schedulers
 
@@ -1168,6 +1216,83 @@ TextColumn::make('title')
 Dragging an event onto another scheduler on the same page calls that scheduler's `onAdopt()`; both reload when it
 returns `true`.
 
+### Saving moves together (drafts)
+
+```php
+$scheduler->batchSave();
+```
+
+![Two events moved as drafts with a dashed outline, and the bar to save or undo them](https://raw.githubusercontent.com/qalainau-labs/filament-warp-scheduler-docs/main/art/drafts.png)
+
+With `batchSave()`, an event you drag or resize is not saved at once. It moves on the screen with a dashed outline
+and a dot, and a bar above the timeline says how many changes are unsaved, with **Save all** and **Undo all**. Use it
+when a dispatcher tries a few arrangements before deciding. Off by default.
+
+- **Save all** saves every draft in one database transaction, with the same checks as a drag (policy, `locked()`,
+  `editable()`, the conflict rules). If one of them is refused, nothing is saved and the drafts stay so you can fix
+  that one. The hooks (`afterEventMoved()`, calendar sync) run after all of them are saved.
+- If someone else moved, resized or deleted one of the events after your page loaded it, **Save all** stops and saves
+  nothing: it does not overwrite their change. A notification names the events, they are shown where the other person
+  put them (or removed), and your other drafts stay. Press **Save all** again to save the rest.
+- **Undo all** puts every event back where it was before the first move. Nothing is sent to the server.
+- Moving an event back to where it was takes it out of the drafts.
+- Not drafted, saved at once as before: occurrences of repeating events (you choose this one, the following or all),
+  copies made with Alt, events dropped from the pool, the board or outside, renames and changes made in a form.
+- Up to 200 drafts at a time. Drafts are kept in the browser: the browser asks before you leave the page with
+  unsaved changes, and they are lost if you reload anyway. They survive going to another week and filtering.
+- The browser dispatches `warp-scheduler:drafted`, `warp-scheduler:drafts-saved` (`{ ok, stale, drafts }`) and
+  `warp-scheduler:drafts-discarded`.
+
+### Finding a free slot
+
+```php
+$scheduler->freeSlotSearch();
+```
+
+![The free slot search with a sentence turned into conditions and three free times](https://raw.githubusercontent.com/qalainau-labs/filament-warp-scheduler-docs/main/art/free-slots.png)
+
+A **Find a free slot** button opens a panel above the timeline. Choose the length, the people or rooms that must be
+free (all of them together, or any one), the dates, the hours of the day and whether to search weekdays only, then
+press **Search**. The scheduler shows up to three free times, and **Create an event at this time** goes to that day
+and opens your create form with the time and the resources filled in. Off by default.
+
+- The times are found with the same rules as dragging and the first-free-slot button: business hours, blocked time,
+  capacity (`NoOverlap`) and your other conflict rules that reject. Times in the past are skipped, and the three
+  times do not overlap.
+- Leave every resource unticked to search all the rows on screen. Only the resources the user can see (after
+  tenancy and filters) are searched; other keys sent from the browser are ignored.
+- For several resources together, the create form gets all of them when the event source has
+  `resourcesRelationship()`; otherwise the event is created on the first one.
+- The search covers up to 62 days and lengths from 5 minutes to 24 hours. It needs an event source the user can
+  create (`schema()` and the policy's `create`); without one, the button is not shown.
+
+#### Typing the request as a sentence (AI)
+
+When an Anthropic API key is set, the panel also has a field for a sentence such as "a free hour next week in the
+afternoon for Tanaka and room A". **Fill in the conditions** sends the sentence to Claude, which only turns it into
+the conditions above (length, resources, dates, hours, days). It does not search: you check the conditions, then
+press **Search**, and the free times are found by the scheduler as above.
+
+```php
+// config/services.php
+'anthropic' => [
+    'key' => env('ANTHROPIC_API_KEY'),
+],
+```
+
+- **What is sent to Anthropic**: the sentence the user typed, today's date and weekday, the scheduler's time zone,
+  and the keys and names of the resources on screen (for example people's names and room names). Events and other
+  records are not sent. Tell your users if your privacy policy requires it, or turn the field off with
+  `freeSlotSearch(ai: false)`. The panel shows a short note about this under the field.
+- Without a key the field is not shown, and the rest of the panel works the same.
+- The model is `claude-haiku-4-5` by default. Change it with `WARP_SCHEDULER_AI_MODEL` (or `ai.model` in the
+  published config). The request uses a forced tool call, so choose a model that accepts `tool_choice` with a named
+  tool.
+- Each user can send 10 sentences a minute. The conditions that come back are checked like the ones from the form:
+  unknown resources are dropped and the dates and lengths are kept within the limits.
+- To use another AI or your own rules, bind your class to `Qalainau\FilamentWarpScheduler\Ai\ReadsSlotRequests`
+  in a service provider.
+
 ### Unscheduled pool
 
 ```php
@@ -1180,6 +1305,36 @@ Records whose start column is empty are listed beside the timeline and can be dr
 
 Each pool item has a button that books it into the first free slot of the resources on screen within two weeks,
 respecting business hours, blocked time and the conflict rules.
+
+#### Moving an event back to the pool
+
+Drag an event from the timeline onto the pool to take it off the timeline: its start and end are cleared, the
+resource is kept, and it is listed in the pool again. While an event is dragged, the pool is outlined and says that
+it can be dropped there (on a touch screen, hold the event, then drag it). This works by default whenever the pool is
+shown, for each event source that can take an event off the timeline: one with `unscheduleUsing()`, or one whose start
+and end columns are nullable in the database. Events of other sources (for example absences with required dates)
+are not taken.
+
+```php
+$scheduler->unscheduledPool()->returnToPool(false); // the pool only gives events, it does not take them back
+
+EventSource::make(WorkOrder::class)
+    // what "taking it off the timeline" means for your records (here: also clear the technician)
+    ->unscheduleUsing(fn (WorkOrder $record): bool => $record->update(['starts_at' => null, 'ends_at' => null, 'technician_id' => null]));
+```
+
+- The same rules as moving decide whether an event may go back: `locked()`, `editable()` and your policy's `update`.
+  A refused event goes back to its place on the timeline and a notification says why.
+- `unscheduleUsing()` replaces how the record is taken off the timeline (the default clears the start and the end).
+  Throw `ChangeRejected` in it to refuse with your own message. The pool lists records whose start is empty, so leave
+  the start empty there, or the record disappears from both.
+- A repeating event (`recurring()`) can't be moved back: neither one date nor the whole series. Its notification asks
+  to delete that date or to change the series in the edit modal, because a single date has no record of its own to
+  put in the pool.
+- Only a plain move is taken: not a resize, an Alt-drag copy or several selected events moved together.
+- With calendar sync, the event is removed from the connected Google or Outlook calendar, as when a board card is
+  moved back to a column before `scheduled()`.
+- The browser dispatches `warp-scheduler:unscheduled` with `{ event, ok }` in `event.detail`.
 
 ### Board (kanban)
 
@@ -1225,6 +1380,11 @@ sparkles button. An event dragged from the timeline onto a column moves there, s
 - `agingFrom()` shows how many days each card before `scheduled()` has waited.
 - `boardLayout(BoardLayout::Beside)` sets the default layout. Users can switch between the board above or beside the
   timeline, the board only and the timeline only; the choice is kept in the browser.
+- `boardWidth('280px')` sets the width of the board when it is beside the timeline, and the timeline takes the rest.
+  By default the board takes two fifths of the width. It takes a number and a unit: `px`, `rem`, `em`, `%`, `vw`,
+  `ch` or `fr` (the timeline is `1fr`, so `'1fr'` gives each half); anything else throws an
+  `InvalidArgumentException`. A closure is evaluated on every render. It has no effect on the other layouts, and on
+  screens narrower than 64rem the board and the timeline are stacked as before.
 - `cardView('work-orders.card')` renders each card with your own view, which receives `$record`, `$card` and
   `$column`.
 - `canMoveCard(fn (Model $record, string $from, string $to): bool => ...)` decides which moves are allowed; your
@@ -1257,6 +1417,140 @@ enum WorkOrderStage: string implements BoardStage, HasLabel
 
 $scheduler->board(WorkOrderStage::class);
 ```
+
+#### Swimlanes
+
+```php
+$scheduler->board([...])->swimlanes('technician_id');
+
+// or lanes of your own, with the value of the column => the name
+$scheduler->board([...])->swimlanes('owner_id', fn (): array => User::query()->where('sales', true)->pluck('name', 'id')->all());
+```
+
+![A board in lanes per technician, with the columns that a card may not move to dimmed](https://raw.githubusercontent.com/qalainau-labs/filament-warp-scheduler-docs/main/art/board-lanes.png)
+
+`swimlanes(string|Closure|null $column, array|Closure|null $lanes = null)` splits the board into a lane per owner,
+technician or anything else in a column of your event model. Off by default.
+
+- Without `$lanes`, a column that is the event source's resource column gives a lane per resource on screen, named
+  like the timeline rows; any other column gives a lane per value found on the board.
+- An **Unassigned** lane holds the cards whose column is empty. It is shown when the column is nullable or when such
+  cards exist.
+- Drag a card to another lane to change that column (to `null` in **Unassigned**), and to another column of the same
+  lane to change the stage as before. Both can change in one drag.
+- When the lanes are the resources, moving a card that is on the timeline to another lane moves the event to that
+  resource at the same time: the conflict rules are checked, `afterEventMoved()` runs and synced calendars are
+  updated. Such a card cannot go to **Unassigned**.
+- Only the lanes on screen are accepted: a lane value sent from the browser that is not one of them (another tenant's
+  resource, a value missing from `$lanes`) is refused.
+- Click a lane's name to fold it; the folded lanes are kept in the browser.
+- `canMoveCard()` and `afterCardMoved()` also receive `?string $fromLane` and `?string $toLane` (`''` for
+  **Unassigned**, `null` without lanes). `afterCardMoved()` now also runs when only the lane changed.
+- Cards whose column holds a value that is not a lane (a resource that is filtered out, a value missing from
+  `$lanes`) are not on the board.
+
+#### Allowed moves between columns
+
+```php
+$scheduler->board([...])->transitions([
+    'received' => ['parts', 'ready'],
+    'parts' => ['ready'],
+    'ready' => ['booked', 'received'],
+    'booked' => ['done', 'ready'],
+]);
+```
+
+`transitions(array|Closure|null $transitions)` lists, for each column, the columns its cards may move to. Off by
+default (`null`: any move).
+
+- While a card is dragged, the columns it may not move to are dimmed and do not take it.
+- The server checks again: a move that is not listed is refused with "Cards in Booked cannot be moved to Waiting." and
+  nothing changes. A column that is not a key may not move anywhere.
+- A card dropped on the timeline moves to the `scheduled()` column, so list that move (`'ready' => ['booked']`) or
+  the drop is refused. This also applies to the first-free-slot button and to events dragged from the timeline onto
+  a column.
+- Moving a card within its column to another lane is always allowed.
+- Values can be strings or cases of a backed enum.
+
+### Testing drags, the pool and the board
+
+A drag ends in one Livewire call, so a feature test can make the same call as the browser with `Livewire::test()`
+and check the database. The calls and what they take:
+
+| Drag | Call | Arguments |
+| --- | --- | --- |
+| An event to another time or resource | `warpSchedulerMove` | event key, start and end (ms), resource key |
+| A pool item or board card onto the timeline | `warpSchedulerSchedule` | event key, start (ms), resource key; the end comes from `defaultDuration()` |
+| An event from the timeline onto the pool | `warpSchedulerUnschedule` | event key |
+| A board card to another column | `warpSchedulerMoveCard` | event key, the column's value, and with `swimlanes()` the lane's value (`''` for **Unassigned**) |
+| **Save all** with `batchSave()` | `warpSchedulerSaveDrafts` | a list of `[event key, start, end, resource key, start, end and resource key when the page loaded it]` |
+| **Search** with `freeSlotSearch()` | `warpSchedulerFindSlots` | the conditions: `duration`, `resources`, `together`, `from`, `to`, `timeFrom`, `timeTo`, `weekdays` |
+
+```php
+use App\Filament\Pages\Bookings;
+use App\Filament\Pages\Dispatch;
+use Carbon\Carbon;
+use Livewire\Livewire;
+
+it('books a request from the unscheduled pool', function () {
+    $room = Room::factory()->create();
+    $request = Booking::factory()->for($room)->create(['title' => 'Request', 'starts_at' => null, 'ends_at' => null]);
+    $ms = fn (string $time): int => Carbon::parse($time, 'UTC')->getTimestampMs();
+
+    $result = Livewire::test(Bookings::class)
+        ->call('warpSchedulerSchedule', "0:{$request->id}", $ms('2026-10-09 09:00'), (string) $room->id)
+        ->effects['returns'][0];
+
+    expect($result['ok'])->toBeTrue()
+        ->and($request->refresh()->starts_at->toDateTimeString())->toBe('2026-10-09 09:00:00');
+});
+
+it('takes a booking off the timeline when it is dropped on the pool', function () {
+    $booking = Booking::factory()->create(['starts_at' => '2026-10-07 09:00', 'ends_at' => '2026-10-07 10:00']);
+
+    $ok = Livewire::test(Bookings::class)
+        ->call('warpSchedulerUnschedule', "0:{$booking->id}")
+        ->effects['returns'][0]['ok'];
+
+    expect($ok)->toBeTrue()
+        ->and($booking->refresh()->starts_at)->toBeNull();
+});
+
+it('refuses what the user may not do and tells why', function () {
+    $done = Booking::factory()->create(['status' => 'done', 'starts_at' => '2026-10-07 09:00', 'ends_at' => '2026-10-07 10:00']);
+
+    $page = Livewire::test(Bookings::class)->call('warpSchedulerUnschedule', "0:{$done->id}");
+
+    expect($page->effects['returns'][0]['ok'])->toBeFalse()
+        ->and($done->refresh()->starts_at)->not->toBeNull();
+
+    $page->assertNotified();
+});
+
+it('moves a work order to another board column', function () {
+    $order = WorkOrder::factory()->create(['stage' => 'received']);
+
+    $result = Livewire::test(Dispatch::class)
+        ->call('warpSchedulerMoveCard', "0:{$order->id}", 'parts')
+        ->effects['returns'][0];
+
+    expect($result)->toBe(['ok' => true, 'unscheduled' => false])
+        ->and($order->refresh()->stage)->toBe('parts');
+});
+```
+
+- The event key is `"{index of the EventSource in events()}:{record key}"`, as in the events that
+  `warpSchedulerFetch` returns. Write the times in the scheduler's time zone; see
+  [Testing with tenancy](#testing-with-tenancy) for both, and for checking that another tenant's IDs are refused.
+- A refused drag returns `['ok' => false]`, saves nothing and sends the notification the user sees; it does not throw.
+- `warpSchedulerMoveCard` returns `'unscheduled' => true` when the card left the timeline (moved back to a column
+  before `scheduled()`).
+- `warpSchedulerSchedule` and `warpSchedulerUnschedule` work only when the page shows the pool (`unscheduledPool()`);
+  `warpSchedulerSchedule` also works with a board.
+- `warpSchedulerSaveDrafts` returns `['ok' => false, 'stale' => [event keys]]` when someone else changed one of the
+  events, and `warpSchedulerFindSlots` returns `['ok' => true, 'slots' => [...]]` with `start` and `end` in
+  milliseconds and the resource keys of each free time.
+- To test the sentence field without calling Anthropic, bind a fake: `app()->instance(ReadsSlotRequests::class, $fake)`.
 
 ### Recurring events
 
@@ -1340,7 +1634,9 @@ $scheduler
 They run after drags, forms, renames, imports and drops. In the browser, the scheduler element dispatches
 `warp-scheduler:navigated`, `warp-scheduler:event-clicked`, `warp-scheduler:slot-selected`, `warp-scheduler:moved`,
 `warp-scheduler:copied`, `warp-scheduler:renamed`, `warp-scheduler:dropped`, `warp-scheduler:adopted`,
-`warp-scheduler:scheduled` and `warp-scheduler:card-moved` with the details in `event.detail`:
+`warp-scheduler:scheduled`, `warp-scheduler:unscheduled`, `warp-scheduler:card-moved`, `warp-scheduler:drafted`,
+`warp-scheduler:drafts-saved`, `warp-scheduler:drafts-discarded` and `warp-scheduler:slots-found` with the details in
+`event.detail`:
 
 ```blade
 <div x-on:warp-scheduler:moved="console.log($event.detail)">{{ $this->getWarpScheduler() }}</div>
