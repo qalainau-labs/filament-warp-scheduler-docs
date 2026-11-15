@@ -5,6 +5,12 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-11-15
+
+### Added
+
+- `SchedulerPage::canWrite()`: override it on your page to make the schedule look-only for some people (same as `readOnly()`, and write calls from the browser answer 403). See "Restricting pages per role" in the README.
+
 ## [1.11.1] - 2026-11-14
 
 ### Fixed

@@ -686,6 +686,49 @@ class TeamSchedule extends SchedulerWidget
 - In a panel with tenancy, the scheduler only shows and changes the current tenant's resources and events. See [Tenancy](#tenancy) below.
 - `readOnly()` disables dragging, creating and deleting; clicking an event opens a read-only view.
 
+### Restricting pages per role
+
+Use this when your app has roles and decides, page by page, who may open a schedule and who may only look at it
+(for example, reception sees the room schedule but only managers change it). The scheduler has no plugin class, so you
+decide on the page you extend from `SchedulerPage`, by overriding two static methods:
+
+```php
+use App\Models\User;
+use Qalainau\FilamentWarpScheduler\Pages\SchedulerPage;
+
+class RoomSchedule extends SchedulerPage
+{
+    // Who may open the page: the menu item, the URL and every Livewire call on an open page
+    public static function canAccess(): bool
+    {
+        return parent::canAccess() && (auth()->user()?->canOpen(static::class) ?? false);
+    }
+
+    // Who may change anything on it. false = look only
+    public static function canWrite(): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && ! $user->isReadOnlyOn(static::class);
+    }
+}
+```
+
+- `canAccess()` is checked by Filament when the page opens and on every Livewire request, so a page that is closed
+  while someone has it open stops answering too (403). Someone who is not signed in gets `false` in the example above.
+- When `canWrite()` returns `false`, the page opens and shows every event, but the scheduler behaves as with
+  `readOnly()`: no dragging or resizing, no copy, no create button, no delete, no inline rename, no unscheduled pool,
+  no board card moves, no batch save, no drops from outside or from another scheduler, no auto scheduling, no Gantt
+  links, no baselines, no free-slot search, no ICS import, no calendar connection and no resource editing. Clicking an event opens a
+  read-only view instead of the edit form. Calling one of these from the browser anyway answers 403 and changes nothing.
+- Reading still works: moving through dates and views, filters, search, tooltips, utilization, printing, CSV/XLSX
+  export, the `.ics` download and the subscribe link.
+- `canWrite()` only narrows what the page already allows. It cannot widen `readOnly()`, your policies, locked events or
+  `canMove()`/`canResize()` on an event source: a change has to pass all of them.
+- Your own `eventActions()` are your actions; hide them with `->visible(fn (): bool => static::canWrite())` if they change data.
+- The scheduler widget and schedulers you put on your own Livewire components or resource pages are not affected;
+  use `readOnly()` there.
+
 ### Tenancy
 
 If your app is a SaaS where each customer (a team, a company, a clinic) has its own data, use Filament's
