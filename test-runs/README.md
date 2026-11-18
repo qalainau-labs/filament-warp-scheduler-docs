@@ -5,6 +5,7 @@ and a version is released only when every combination passes. Each database is t
 
 | Version | Tested | Combinations |
 | --- | --- | --- |
+| [1.15.0](1.15.0.md) | 2026-11-18 | PHP 8.3, 8.4, 8.5 × Laravel 12, 13 × 7 databases |
 | [1.14.0](1.14.0.md) | 2026-11-18 | PHP 8.3, 8.4, 8.5 × Laravel 12, 13 × 7 databases |
 | [1.13.0](1.13.0.md) | 2026-11-18 | PHP 8.3, 8.4, 8.5 × Laravel 12, 13 × 7 databases |
 | [1.12.0](1.12.0.md) | 2026-11-15 | PHP 8.3, 8.4, 8.5 × Laravel 12, 13 × 7 databases |

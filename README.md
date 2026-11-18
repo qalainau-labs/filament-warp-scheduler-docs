@@ -237,6 +237,17 @@ Right-click still opens the menu; compact layouts do not display these columns. 
 ])
 ```
 
+Set a column's optional `align` to `start`, `center`, or `end` to align both its header and cells in the timeline
+and Gantt. The default is `end` (right-aligned); `start` and `end` keep 8px of padding. Unknown values throw an
+`InvalidArgumentException`.
+
+```php
+->resourceColumns([
+    'product_names' => ['label' => 'Products', 'width' => 150, 'align' => 'start'],
+    'capacity' => ['label' => 'Seats', 'align' => 'center'],
+])
+```
+
 Enable `resizableResourceColumns()` to drag the right edge of the name heading and each extra column heading
 in the timeline and Gantt (40–1000px). Double-click an edge or press Home to restore its configured width.
 Focus an edge and use Left/Right (10px, or 50px with Shift) to resize with the keyboard. Widths are saved only in

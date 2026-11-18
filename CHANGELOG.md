@@ -5,6 +5,12 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0] - 2026-11-18
+
+### Added
+
+- Optional `align` (`start`, `center`, `end`) for `resourceColumns()` sets the alignment of a column's header and cells; the default stays `end`.
+
 ## [1.14.0] - 2026-11-18
 
 ### Added
