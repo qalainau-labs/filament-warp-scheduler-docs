@@ -5,6 +5,39 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.13.0] - 2026-11-18
+
+### Fixed
+
+- Exact date ranges honor configured header rows, including zoom overrides, with daily widths and clipped, sticky month headings.
+
+- Invalid browser-supplied periods return empty results instead of server errors or evaluating callbacks and queries with out-of-range dates.
+- After an action (event or row actions, create, edit, delete) or a new payload from Livewire, the timeline and the Gantt keep the rows on screen and the scroll position (the row you were looking at stays in place) instead of clearing the rows and jumping back to the top while they reload. Responses from fetches started before the reload are ignored.
+
+### Added
+
+- Opt-in `headerDragScroll()` pans timeline and Gantt headers with mouse, pen or touch, with Escape cancellation, RTL support and validated date-range edge extension.
+
+- `EventSource::order()` and `reorderUsing()`: ordered overlap lanes, vertical drag insertion and Alt+Up/Down reordering in resource timelines and Gantt, with scoped server validation and row-preserving refresh.
+
+- `dateRangePicker()`, `dateRangePresets()` and `initialDateRange()`: inclusive date ranges in the timeline/Gantt, server-calculated presets and validated period-aware navigation. `dateRangeDayWidth()` sets a minimum daily width (56px by default) with horizontal scrolling and an initial position near today; `dateRangeExtendButtons()` extends either boundary with fetch-limit protection.
+- `resizableResourceColumns()`: drag or keyboard-resize resource headings, with per-page/user browser persistence, reset and print support.
+- `dayHeaderColor()` and `dayBackground()`: server-calculated daily colors, holiday-aware callbacks, layered row/day backgrounds (full opacity in light mode, 20% in dark mode) and print support.
+
+- `keepResourceGroupOrder(bool|Closure)`: preserve first-seen resource group order at every nesting level.
+- `resourceBackground(string|Closure|null)`: fill resource rows in the timeline and Gantt, with dark-mode blending and print support.
+- `resourceColumns()` column `color`: record-aware CSS text colors alongside attribute or `state` values, also used in print.
+- `EventSource::inclusiveEnd()` for all-day models storing the last included date, including single-column milestones and null end dates.
+- `resourceActions(array|Closure)`: Filament actions on resource rows, with server-rendered menus and scoped model resolution.
+- Range-aware `resources()` closures: named `$start` / `$end` receive immutable local bounds; navigation and filters reload rows before events, with validated persisted periods and stale response protection.
+
+### Changed
+
+- Restrict resource lookups and event-fetch authorization to requested keys while retaining tenant, filter and range scopes; preserve full-query membership for limited, offset, grouped and having queries.
+- `RecurrenceRule::parse()` and `occurrencesBetween()` are now public API, and the README shows how to read the occurrences of a recurring event in your own code (your own reminders, reports and exports), skipping the deleted and moved ones. See "Reading the occurrences in your own code".
+
 ## [1.12.0] - 2026-11-15
 
 ### Added

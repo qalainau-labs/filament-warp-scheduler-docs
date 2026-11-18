@@ -41,7 +41,7 @@ class StaffSchedule extends SchedulerPage
 - [Features](#features)
 - [Requirements](#requirements): [Tested on](#tested-on)
 - [Installation](#installation): [AI coding assistants (Laravel Boost)](#ai-coding-assistants-laravel-boost)
-- [Usage](#usage): [Where to put a scheduler](#where-to-put-a-scheduler) · [Resources](#resources) · [Events](#events) · [Import, export and other data](#import-export-and-other-data) · [Views and time](#views-and-time) · [Dependent fields in the event form](#dependent-fields-in-the-event-form) · [Filters](#filters) · [Permissions, tenancy and read-only mode](#permissions-tenancy-and-read-only-mode) · [Tenancy](#tenancy) · [Actions](#actions) · [Saving through your own code](#saving-through-your-own-code) · [Search, drops from outside and other schedulers](#search-drops-from-outside-and-other-schedulers) · [Saving moves together (drafts)](#saving-moves-together-drafts) · [Finding a free slot](#finding-a-free-slot) · [Unscheduled pool](#unscheduled-pool) · [Board (kanban)](#board-kanban) · [Testing drags, the pool and the board](#testing-drags-the-pool-and-the-board) · [Recurring events](#recurring-events) · [Availability and conflicts](#availability-and-conflicts) · [Holidays and business hours from Warp DatePicker](#holidays-and-business-hours-from-warp-datepicker) · [Utilization](#utilization) · [Hooks](#hooks) · [Gantt](#gantt) · [iCal and printing](#ical-and-printing) · [Calendar sync](#calendar-sync)
+- [Usage](#usage): [Where to put a scheduler](#where-to-put-a-scheduler) · [Resources](#resources) · [Events](#events) · [Import, export and other data](#import-export-and-other-data) · [Views and time](#views-and-time) · [Dependent fields in the event form](#dependent-fields-in-the-event-form) · [Filters](#filters) · [Permissions, tenancy and read-only mode](#permissions-tenancy-and-read-only-mode) · [Tenancy](#tenancy) · [Actions](#actions) · [Saving through your own code](#saving-through-your-own-code) · [Search, drops from outside and other schedulers](#search-drops-from-outside-and-other-schedulers) · [Saving moves together (drafts)](#saving-moves-together-drafts) · [Finding a free slot](#finding-a-free-slot) · [Unscheduled pool](#unscheduled-pool) · [Board (kanban)](#board-kanban) · [Testing drags, the pool and the board](#testing-drags-the-pool-and-the-board) · [Recurring events](#recurring-events) · [Reading the occurrences in your own code](#reading-the-occurrences-in-your-own-code) · [Availability and conflicts](#availability-and-conflicts) · [Holidays and business hours from Warp DatePicker](#holidays-and-business-hours-from-warp-datepicker) · [Utilization](#utilization) · [Hooks](#hooks) · [Gantt](#gantt) · [iCal and printing](#ical-and-printing) · [Calendar sync](#calendar-sync)
 - [Browser tests and screen readers (JavaScript)](#browser-tests-and-screen-readers-javascript): [The list of the events in the page](#the-list-of-the-events-in-the-page) · [`eventRects()` and `whenIdle()`](#eventrects-and-whenidle)
 - [Keyboard](#keyboard)
 - [Limitations](#limitations)
@@ -189,6 +189,109 @@ $scheduler
 
 A resource model can implement `SchedulerResource` (`getSchedulerTitle()` and `getSchedulerGroups()`) instead.
 
+Group headings use natural, case-insensitive order by default. Use `keepResourceGroupOrder()` (or a boolean closure)
+to keep the order in which groups first appear in `resources()`, at every nesting level. Rows within each group
+always keep the resource order. This is useful for orders sorted by delivery date and grouped by their import file:
+
+```php
+$scheduler
+    ->resources(fn () => Order::query()->orderBy('delivery_date'))
+    ->groupResourcesBy('import_file')
+    ->keepResourceGroupOrder();
+```
+
+Use `resourceBackground()` for the whole resource row, including its title, extra columns and timeline,
+and the resource's project row in Gantt. Pass a CSS color (`#hex`, `rgb()` or a color name), a closure receiving
+`$record`, or `null` for no fill. In dark mode the color is blended over the background at 20% opacity.
+Holiday/weekend shading, grid lines, event bars and interaction indicators remain above it. The fill is printed too.
+`resourceColor()` continues to set the small color marker beside the title.
+
+```php
+$scheduler
+    ->resourceColor(fn (Order $record): ?string => $record->status_color)
+    ->resourceBackground(fn (Order $record): ?string => $record->is_urgent ? '#fee2e2' : null)
+    ->resourceColumns([
+        'status' => [
+            'label' => 'Status',
+            'width' => 80,
+            'state' => fn (Order $record): string => $record->status_label,
+            'color' => fn (Order $record): ?string => $record->status_color,
+        ],
+    ]);
+```
+
+Extra columns read the attribute named by their key unless `state` supplies a value. Their optional `color`
+sets the text color, including when printing; `null` keeps the default text color. Choose CSS colors that remain
+readable in both light and dark mode: column text colors are used as supplied. Background and column colors
+are evaluated again when period-dependent resources or refreshed rows are loaded.
+
+
+Enable `resizableResourceColumns()` to drag the right edge of the name heading and each extra column heading
+in the timeline and Gantt (40–1000px). Double-click an edge or press Home to restore its configured width.
+Focus an edge and use Left/Right (10px, or 50px with Shift) to resize with the keyboard. Widths are saved only in
+localStorage, separately for each page, scheduler component and signed-in user; unavailable storage does not prevent
+resizing. Printing uses the current widths. Compact screens keep their existing narrow name column and hide extra columns.
+
+```php
+$scheduler->resourceColumnWidth(240)->resourceColumns([...])->resizableResourceColumns();
+```
+
+### Resource actions
+
+Use `resourceActions(array|Closure $actions)` for Filament actions on a row's model:
+
+```php
+use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
+
+$scheduler->resourceActions([
+    Action::make('autoSchedule')
+        ->label('Auto schedule')
+        ->visible(fn (Order $record): bool => $record->scheduled_items()->doesntExist())
+        ->action(fn (Order $record) => app(OrderPlanner::class)->schedule($record)),
+    Action::make('memo')
+        ->schema([Textarea::make('progress_memo')])
+        ->fillForm(fn (Order $record): array => ['progress_memo' => $record->progress_memo])
+        ->action(fn (Order $record, array $data) => $record->update($data)),
+]);
+```
+
+Right-click a resource name to open its menu. Visible, authorized custom actions appear in their configured order,
+followed by edit and delete when `resourceSchema()` enables them. Clicking the name opens the editor if enabled;
+otherwise it opens the same menu. Group headings and empty space have no resource menu.
+
+Actions mount with `['resource' => $key]`. Their `$record` always comes from `resources()`, including filters,
+tenancy and the current period: forged, missing or excluded keys cannot mount an action. Your own
+`resourceActions()` are your actions; hide them with `->visible(fn (): bool => static::canWrite())` if they change data.
+They remain available in read-only mode, like `eventActions()`.
+
+### Resources following the visible period
+
+Declare a parameter named `$start` or `$end` in the `resources()` closure to reload rows when the visible period changes:
+
+```php
+use Carbon\CarbonImmutable;
+
+$scheduler->resources(fn (array $filters, CarbonImmutable $start, CarbonImmutable $end) => Order::query()
+    ->whereBetween('delivery_date', [$start, $end->subDay()])
+    ->orderBy('delivery_date'));
+```
+
+Both bounds are immutable dates in the scheduler's time zone; the period is `[start, end)` (end excluded).
+For a datetime column, use `>= $start` and `< $end` instead of subtracting a day. Convert to the storage time zone
+when needed. Parameters are injected by name, and you may omit ones you do not use.
+
+The browser resolves the initial period before displaying any rows. Navigation, zoom, view changes (including
+resource day and week), and filters reload the resource tree before fetching events. Only the latest requested period
+is displayed, including an empty result. Groups, extra columns and row colors use the same serialization as the initial
+payload. The validated period persists in Livewire and also scopes resource actions and the event-fetch allowlist.
+Invalid dates, reversed/empty periods and periods longer than `Scheduler::MAX_FETCH_DAYS` keep the previous period.
+
+Closures without `$start`/`$end`, model class names and closures returning collections keep their existing behavior.
+A collection-returning closure with named bounds opts in too. When combining period-dependent resources with
+`resourceSchema()`, pass the model explicitly (`->resourceSchema([...], model: Order::class)`) so creation is available
+before the first resource response, even when no rows match.
+
 ### Events
 
 ```php
@@ -229,6 +332,75 @@ $scheduler->quickInfo();  // clicking an event shows its details and actions ins
 ```
 
 Strings are escaped; return an `Htmlable` (a view or `HtmlString`) for markup.
+
+#### Ordering overlapping events
+
+```php
+EventSource::make(Process::class)
+    ->resource('order_id')->start('starts_on')->end('ends_on')->allDay()
+    ->order('position');
+```
+
+`order(string|Closure $order)` puts smaller values in the upper lanes before comparing the start,
+duration and event key. A string names an attribute; a closure receives `$record` and returns
+`int|float|string|null`. Null values follow ordered events and keep the usual time-based order.
+The compact payload includes `o` only when the value is non-null. This also controls overlapping
+columns/bands in day and week views; those views do not offer manual reordering.
+
+In the resource timeline and Gantt, drag a movable event vertically within the same resource,
+keeping the horizontal pointer position, and drop above, below or between its overlapping events.
+A line marks the insertion point. Select an event and press **Alt+Up/Down** to reorder with the keyboard.
+Moving horizontally, changing resources, resizing and Alt-drag copying use the usual move behavior.
+Reordering leaves the start and exclusive end unchanged and does not call `moveUsing()`.
+
+The group consists of visible events, including locked events, **of the same source and resource** whose intervals
+intersect the dragged event's original `[start, end)`; adjacent intervals do not overlap. It is not
+a transitive group of events connected through other events. For all-day events these are floating
+calendar dates in the scheduler's time zone. Recurring occurrences and unsaved drafts cannot be
+reordered. For pointer reordering, scroll the group's events into view first.
+
+With a column name, the default save writes `1, 2, 3, …` to that column for every event in the group,
+including locked events, in the submitted order. Locked events keep their dates; their order values can change.
+To save through your service, or when the value comes from a closure, provide:
+
+```php
+->order(fn (Process $record): ?int => $record->position)
+->reorderUsing(function (
+    Process $record,
+    array $orderedKeys,
+    \Carbon\CarbonImmutable $start,
+    \Carbon\CarbonImmutable $end,
+    string $resource,
+): void {
+    app(ProcessOrderService::class)->reorder($record, $orderedKeys, $start, $end, $resource);
+})
+```
+
+`$orderedKeys` contains every scheduler event key in the group (for example `0:42`, or `0:42~7`
+for a shared event), in the requested top-to-bottom order, including the dragged record and locked
+records. Groups contain at most 1,000 events. Locked events cannot be dragged, but their order
+values are saved with the rest of the group. Read-only mode, move permissions and model view/update
+policies for the dragged event are checked on the server. The server rejects duplicate, missing, stale or foreign keys,
+other resources/tenants, and events outside the fetched period or the original overlap group.
+The callback runs in a transaction; throw `ChangeRejected` to refuse the change.
+
+After a reorder or move the scheduler reloads events while retaining the rows and scroll position.
+When your application's process order must replace a manual order after a move or creation, recompute
+positions in your `moveUsing()` / `createUsing()` service (or event hooks); the reload reads those values.
+`order()` does not infer a process sequence. A column used by several resources represents a record-wide
+order; use a custom callback/value when each resource needs an independent order.
+
+#### Inclusive end dates
+
+For date-only models whose end column stores the **last included day**, use:
+
+```php
+EventSource::make(Absence::class)
+    ->resource('staff_id')->start('starts_on')->end('ends_on')
+    ->allDay()->inclusiveEnd();
+```
+
+The scheduler uses an exclusive end internally and converts it back when saving moves, resizes, selections and imports. Forms show and save the last included day unchanged. A null end means one day from the start. When start and end use the same column, the event lasts one day and cannot be resized. `inclusiveEnd(bool|Closure $condition = true)` requires `allDay(true)`; enabling it for timed or mixed sources throws `LogicException`. Custom `moveUsing()` callbacks still receive the exclusive end; use `slotAttributes()` to obtain storage values.
 
 #### Events without the time in the box
 
@@ -346,6 +518,68 @@ $scheduler
     ->calendarResourceLimit(300);   // week, day, month and list show all events together
 ```
 
+Use date inputs and server-calculated presets to show an exact period in the resource timeline or Gantt:
+
+```php
+use Carbon\CarbonImmutable;
+
+$scheduler
+    ->dateRangePicker()
+    ->dateRangePresets([
+        'This fortnight' => fn (CarbonImmutable $today): array => [$today->startOfWeek(), $today->startOfWeek()->addDays(13)],
+        'Next week' => fn (CarbonImmutable $today): array => [$today->addWeek()->startOfWeek(), $today->addWeek()->endOfWeek()],
+    ])
+    ->initialDateRange(fn (CarbonImmutable $today): array => [$today, $today->addDays(13)]);
+```
+
+`dateRangePicker(bool|Closure $condition = true)` controls the two date inputs; presets can be used independently.
+`dateRangePresets(array|Closure $presets)` maps labels to closures, evaluated on the server when clicked with `$today`
+in `timezone()`. `initialDateRange(Closure|array|null $range)` accepts the same two inclusive bounds (Carbon dates or
+`YYYY-MM-DD` strings). The display and `resources($start, $end)` fetch use `[start, end + 1 day)` in that time zone.
+Invalid/reversed dates and periods longer than `Scheduler::MAX_FETCH_DAYS` are refused with a notification.
+
+An exact period uses daily ticks with a minimum width of 56px and horizontal scrolling when needed.
+`headerRows([HeaderRow::Month, HeaderRow::Day])` adds month headings above the days; year and week rows are also
+supported, including the active `zoomSettings()` header rows. Hour and minute rows are skipped. Partial months
+cover only their visible days, and upper headings stay readable as you scroll.
+Use `dateRangeDayWidth(int|Closure $px)` to change the minimum. Short periods expand to fill the available width.
+On opening or changing the period, the view scrolls just before today if it is in the range, otherwise to the start.
+Add `dateRangeExtendButtons(int|Closure $days = 7)` for compact buttons beside the inputs that extend only the
+start or end by that many calendar days and reload period-dependent resources. Buttons are disabled when the
+extension would exceed `Scheduler::MAX_FETCH_DAYS`; their tooltip explains the limit.
+Enable `headerDragScroll(bool|Closure $condition = true)` to grab any timeline or Gantt date header row with a
+mouse, pen or touch and pan horizontally, including in read-only mode. It is off by default. Movements below 4px
+keep the usual click behavior; Escape restores the starting position. RTL reverses the pan direction.
+With an exact period and `dateRangeExtendButtons(7)`, reaching within 10px of either scroll boundary extends that
+side through the same validated server request as the buttons. Prepending days preserves the visible position.
+Extensions pause during loading and obey the fetch limit; staying at an edge does not repeatedly extend it.
+
+An exact period is independent of the normal zoom steps. Previous/next
+move by its calendar-day length; Today starts a period of the same length today. Pressing any zoom button returns to
+normal zoom behavior. The validated period is kept in locked Livewire state across filter changes and component redraws,
+just like period-dependent resource loading. A selected range (or returning to normal zoom) is also remembered in the
+server session for the page, component and signed-in user when reopening the page. `initialDateRange()` supplies the
+first period before the user makes a choice.
+
+Use `dayHeaderColor()` and `dayBackground()` for date-aware colors, computed on the server for the visible period:
+
+```php
+$scheduler
+    ->dayHeaderColor(fn (CarbonImmutable $date, ?string $holiday): ?string => match (true) {
+        $holiday !== null => '#ea580c',
+        $date->isSunday() => '#dc2626',
+        $date->isSaturday() => '#2563eb',
+        default => null,
+    })
+    ->dayBackground(fn (CarbonImmutable $date, ?string $holiday): ?string => $holiday ? '#fed7aa' : null);
+```
+
+`$date` is local midnight and `$holiday` is the name supplied by `holidays()` (or `null`). Returning `null` keeps the
+existing text color or weekend/holiday shading. Colors apply to daily timeline/Gantt headings and columns, and calendar
+dates in week and month views, including print. Backgrounds replace that day's weekend/holiday fill: the resource row
+background is drawn first, then the day color at full opacity (20% in dark mode), then today's highlight, grid lines and
+event bars. Resource row colors remain visible on days without a day background. Day header text colors are used as supplied.
+
 Slots, visible days and hours, and header rows:
 
 ```php
@@ -380,7 +614,9 @@ More views are available on demand (the default set is `SchedulerView::defaults(
 
 Hidden days and hours are left out of the timeline (hour zooms squeeze the night away), the week and month
 grids and the time grids. Header rows finer than the zoom are skipped. With only day rows (or coarser) in the Day or
-Week zoom (`headerRows([HeaderRow::Day])`), each day is one cell, without hour lines.
+Week zoom (`headerRows([HeaderRow::Day])`), each day is one cell, without hour lines. Exact date ranges also honor
+`headerRows()` (including active zoom overrides), using only day or coarser rows and compact day/weekday labels.
+Use `headerDragScroll()` to pan by dragging any date header row in resource timelines and Gantt.
 
 #### Height of the board
 
@@ -1608,6 +1844,62 @@ EventSource::make(Booking::class)
 
 Rules are stored in `warp_scheduler_recurrences`. Changing an occurrence asks whether to apply it to that occurrence, to it and the following ones, or to the whole series.
 
+#### Reading the occurrences in your own code
+
+Use the stored recurrence to read individual occurrences for your own reminders, reports or exports, without creating a Scheduler instance. `Qalainau\FilamentWarpScheduler\Models\Recurrence` stores the `schedulable` morph relation to the series' original record, its `rule` (RRULE string), `timezone` and `exceptions` relation. `RecurrenceRule::parse()` and `occurrencesBetween()` are public API: their arguments and return value follow semantic versioning. The other methods of `RecurrenceRule` are internal.
+
+```php
+RecurrenceRule::parse($recurrence->rule)
+    ->occurrencesBetween($dtStart, $timezone, $allDay, $from, $to, limit: 1000);
+```
+
+- `$dtStart`: the start of the series' **first** occurrence, from the original record, not the start of the requested range.
+- `$timezone`: the recurrence's stored time zone. Timed occurrences keep their wall-clock time in this zone, including across daylight saving changes.
+- `$allDay`: whether the series uses dates only. When `true`, the time zone argument is ignored: the calendar dates of `$dtStart`, `$from` and `$to` are interpreted as midnight UTC without converting their dates. Returned dates also use UTC.
+- `$from` and `$to`: Carbon dates delimiting the occurrence **starts** to read, including both bounds. For a half-open timed range, exclude starts at `$to` yourself. For all-day ranges, pass the last included date as `$to`.
+- `$limit`: maximum number of starts returned per call, before filtering exceptions; defaults to `1000`. A result at the limit may be incomplete. Use smaller ranges or a larger limit when needed.
+
+The result is a list of `CarbonImmutable` starts. Compute each end yourself as the start plus the original event's duration: elapsed milliseconds for timed events, or calendar days for all-day events (whose end date is exclusive).
+
+The rule does not apply exceptions for you. Skip any start found in `$recurrence->exceptions->pluck('original_start')`, regardless of the exception type: both a deleted occurrence (`skipped`) and the original of a moved or edited occurrence (`overridden`) must be excluded. The key is a `Y-m-d` string for all-day events, or a **Unix timestamp in milliseconds as a string** for timed events: `(string) $start->getTimestampMs()`. A replacement is saved as an ordinary event record, linked by the exception's `override` morph relation; read it through your normal event query as well. Eager-load `exceptions.override` when reading replacement records to avoid lazy loading.
+
+For example, put this in `routes/console.php` and run `php artisan bookings:remind-tomorrow`. It lists tomorrow's recurring starts in Tokyo time; replace the `info()` call with your application's reminder notification. This assumes the `Booking` model casts `starts_at` and `ends_at` to datetimes and `all_day` to boolean. Query ordinary bookings separately for one-off events and replacements, and apply your application's tenant and recipient scope to both queries.
+
+```php
+use App\Models\Booking;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Artisan;
+use Qalainau\FilamentWarpScheduler\Models\Recurrence;
+use Qalainau\FilamentWarpScheduler\Recurrence\RecurrenceRule;
+Artisan::command('bookings:remind-tomorrow', function (): void {
+    $from = CarbonImmutable::tomorrow('Asia/Tokyo');
+    $to = $from->endOfDay();
+    $recurrences = Recurrence::query()->with(['schedulable', 'exceptions.override'])
+        ->where('schedulable_type', (new Booking)->getMorphClass())->get();
+    foreach ($recurrences as $recurrence) {
+        $booking = $recurrence->schedulable;
+        if (! $booking || ! $booking->starts_at) {
+            continue;
+        }
+        $allDay = (bool) $booking->all_day;
+        $dtStart = $allDay
+            ? CarbonImmutable::parse($booking->starts_at->toDateString(), 'UTC')
+            : CarbonImmutable::instance($booking->starts_at);
+        $skipped = $recurrence->exceptions->pluck('original_start')->flip();
+        $starts = RecurrenceRule::parse($recurrence->rule)
+            ->occurrencesBetween($dtStart, $recurrence->timezone, $allDay, $from, $to);
+        foreach ($starts as $start) {
+            $original = $allDay ? $start->toDateString() : (string) $start->getTimestampMs();
+            if (! $skipped->has($original)) {
+                $this->info("Reminder: {$booking->getKey()} at {$start->toIso8601String()}");
+            }
+        }
+    }
+});
+```
+
+For reports or exports that include events overlapping the range, move `$from` backwards by the original event's duration before expanding (subtract days for all-day events, milliseconds for timed events). Then compute each end and retain only occurrences that overlap your actual range; for a half-open range, `start < rangeEnd && end > rangeStart`. The reminder example above only needs starts within tomorrow, so it does not widen the range.
+
 ### Availability and conflicts
 
 ```php
@@ -1876,7 +2168,7 @@ On touch screens, press and hold an event to drag it.
 ## Limitations
 
 - Week, day, month, year and list views show every event together and are limited to `calendarResourceLimit()` resources. Use the filters for larger boards.
-- Events shared by several resources (`resourcesRelationship()`) cannot be recurring, and reminders are not sent for the occurrences of recurring events.
+- Events shared by several resources (`resourcesRelationship()`) cannot be recurring, and reminders are not sent for the occurrences of recurring events. You can [send your own occurrence reminders](#reading-the-occurrences-in-your-own-code).
 - Events from `eventsUsing()` are read-only. A date range for printing works in the timeline, Gantt and list views.
 - Images from other sites appear in printouts only when those sites allow CORS.
 - Recurring events from Google or Outlook are imported as single occurrences. Recurring series created in the scheduler are exported with their rule.
