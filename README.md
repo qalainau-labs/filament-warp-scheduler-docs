@@ -225,6 +225,17 @@ sets the text color, including when printing; `null` keeps the default text colo
 readable in both light and dark mode: column text colors are used as supplied. Background and column colors
 are evaluated again when period-dependent resources or refreshed rows are loaded.
 
+Set a column's optional `action` to a name registered in `resourceActions()` to open that row's action directly
+when its cell is clicked in the timeline or Gantt. Hidden or unauthorized actions fall back to the resource menu.
+Right-click still opens the menu; compact layouts do not display these columns. Unknown action names throw an
+`InvalidArgumentException`.
+
+```php
+->resourceActions([Action::make('viewOrder')->modalContent(...)])
+->resourceColumns([
+    'product_names' => ['label' => 'Products', 'width' => 150, 'action' => 'viewOrder'],
+])
+```
 
 Enable `resizableResourceColumns()` to drag the right edge of the name heading and each extra column heading
 in the timeline and Gantt (40–1000px). Double-click an edge or press Home to restore its configured width.
