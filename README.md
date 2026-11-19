@@ -561,6 +561,8 @@ in `timezone()`. `initialDateRange(Closure|array|null $range)` accepts the same 
 `YYYY-MM-DD` strings). The display and `resources($start, $end)` fetch use `[start, end + 1 day)` in that time zone.
 Invalid/reversed dates and periods longer than `Scheduler::MAX_FETCH_DAYS` are refused with a notification.
 
+After you click a preset, its button looks pressed (`aria-pressed="true"`) for as long as the displayed period is exactly that preset's range. Changing a date by hand, extending the range or pressing Today puts the button back.
+
 An exact period uses daily ticks with a minimum width of 56px and horizontal scrolling when needed.
 `headerRows([HeaderRow::Month, HeaderRow::Day])` adds month headings above the days; year and week rows are also
 supported, including the active `zoomSettings()` header rows. Hour and minute rows are skipped. Partial months
@@ -1946,6 +1948,8 @@ $scheduler
         CustomRule::using(fn (Placement $placement): ?string => $placement->start->isWeekend() ? 'No weekend bookings.' : null),
     ]);
 ```
+
+When every event source is `allDay(true)`, hours of the day mean nothing, so the shading is drawn per day: a day with any working time is left white, and only days without working time (weekends, holidays, days off) are shaded. A scheduler with a timed source keeps the hourly shading.
 
 Weekly hours and date exceptions per resource (or for all resources, such as holidays) can also be stored in `warp_scheduler_availabilities`, and blocked time in `warp_scheduler_blocks`. To compute availability yourself, for example with `spatie/opening-hours` or `laraveljutsu/zap`, return intervals from `availabilityUsing(fn (Model $resource, CarbonImmutable $from, CarbonImmutable $to) => [[$start, $end], ...])`.
 

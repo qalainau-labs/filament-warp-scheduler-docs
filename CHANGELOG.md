@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.2] - 2026-11-19
+
+### Changed
+
+- When every event source is `allDay(true)`, the working-hours shading (`businessHours()`, availability rows, the `useWarpDatePicker()` calendar) is drawn per day instead of per hour: only days without working time are shaded. Before, such a board showed thin white vertical strips on every working day. Boards with a timed source look the same as before. Nothing to configure.
+
+### Fixed
+
+- The preset buttons of `dateRangePresets()` now look pressed while the displayed period is that preset's range, and stop looking pressed once you change a date, extend the range or navigate.
+- A day-only header (for example `zoomSettings()` with `headerRows` set to `[HeaderRow::Day]` on the week zoom) no longer cuts the label to "20日…" in a narrow column. It switches to a shorter form ("20日 金", then "20日") that fits, in all 10 languages.
+
 ## [1.15.1] - 2026-11-19
 
 ### Changed
