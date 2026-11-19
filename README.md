@@ -365,7 +365,8 @@ EventSource::make(Process::class)
 
 `order(string|Closure $order)` puts smaller values in the upper lanes before comparing the start,
 duration and event key. A string names an attribute; a closure receives `$record` and returns
-`int|float|string|null`. Null values follow ordered events and keep the usual time-based order.
+`int|float|string|null`. Null values follow ordered events and keep the usual time-based order
+(in the Gantt, the order the tasks were created in instead; see [Gantt](#gantt)).
 The compact payload includes `o` only when the value is non-null. This also controls overlapping
 columns/bands in day and week views; those views do not offer manual reordering.
 
@@ -903,6 +904,7 @@ On phones (screens under 640px wide) the scheduler switches to `mobileView()` (t
 current view) and narrows the resource column. When the scheduler itself is narrower than 640px, for example a
 widget in half a dashboard, it keeps its view but turns the view tabs into a select and hides the unscheduled pool. Right-to-left pages (`dir="rtl"`)
 are mirrored automatically; `rtl()` forces it.
+View and zoom tabs also turn into selects whenever they do not fit the toolbar, without changing the current view or hiding the unscheduled pool.
 
 ### Filters
 
@@ -1517,6 +1519,14 @@ TextColumn::make('title')
 Dragging an event onto another scheduler on the same page calls that scheduler's `onAdopt()`; both reload when it
 returns `true`.
 
+The conflict rules (`conflictRules()`) apply to both. For `onExternalDrop()` the callback decides the time and length,
+so the rules are checked against the record it returns, inside the same transaction: if a rule refuses, the change is
+rolled back and the reason is shown. Return the saved record to have it checked (a callback that returns nothing is not
+checked). An event with several resources (`resourcesRelationship()`) is checked on each of them. For `onAdopt()` the
+rules are checked before the callback runs, with the time and resource it was dropped on, using the first event source;
+in a view without resources the callback runs unchecked. A drop onto an event passes that event's start as `$start`, so
+a callback that ignores `$event` books from that time.
+
 ### Saving moves together (drafts)
 
 ```php
@@ -1663,6 +1673,8 @@ $scheduler
     ])
     ->agingFrom('created_at', warning: 3, danger: 7);
 ```
+
+Board columns shrink to 10rem before scrolling horizontally and expand to fill the available width on wider screens.
 
 The board replaces the unscheduled pool. There are three kinds of column:
 
@@ -2015,6 +2027,15 @@ EventSource::make(Task::class)->resource('project_id')->progress('progress');
 ```
 
 Each resource is a project and its events are the tasks.
+
+Each task has its own row. The rows of a project stay in the order the tasks were created in (event source, then
+record ID), so a task keeps its row when you drag it to other dates or when the tasks after it move along. To choose the
+order yourself, use `order()` on the event source (see [Ordering overlapping events](#ordering-overlapping-events)):
+tasks with a value come first, smallest first, then the tasks without one in the order they were created in.
+
+```php
+EventSource::make(Task::class)->resource('project_id')->progress('progress')->order('position');
+```
 
 #### Calculating dates yourself
 

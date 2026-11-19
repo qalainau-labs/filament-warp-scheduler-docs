@@ -5,6 +5,20 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.15.1] - 2026-11-19
+
+### Changed
+
+- View and zoom tabs turn into selects when they do not fit the toolbar, and return when there is room.
+- Board columns shrink to 10rem before scrolling horizontally, keeping more columns visible beside an open sidebar.
+- Gantt rows no longer follow the start date: tasks stay in the order they were created in (or the `order()` you set), so a dragged task keeps its row instead of jumping above or below another task. After updating, tasks of a project that were created out of date order show in a different order; set `order()` to choose it.
+
+### Fixed
+
+- The conflict rules (`NoOverlap` and the others) now also apply to items dropped from outside the scheduler (`onExternalDrop()`), including drops onto an event, and to events moved in from another scheduler (`onAdopt()`). Before, a board that forbids double bookings accepted these drops on top of a booked time. A refused drop saves nothing and shows the reason.
+
 ## [1.15.0] - 2026-11-18
 
 ### Added
