@@ -248,6 +248,39 @@ and Gantt. The default is `end` (right-aligned); `start` and `end` keep 8px of p
 ])
 ```
 
+#### Badges in a column
+
+Give a column `badges` to show small colored badges in its cells instead of text, for example which materials
+of an order are ready. The closure returns the row's badges in display order. Each badge is a label, or an array
+with a `label` and optional `color`, `background` and `border`:
+
+```php
+->resourceColumns([
+    'materials' => [
+        'label' => 'Materials',
+        'width' => 120,
+        'align' => 'start',
+        'badges' => fn (Order $record): array => $record->materials->map(fn (Material $material): array => [
+            'label' => $material->short_name,
+            'color' => $material->is_ready ? 'success' : 'danger',
+        ])->all(),
+    ],
+])
+```
+
+- `color` is a Filament color name (`primary`, `success`, `danger`, `warning`, `info`, `gray` or one registered
+  with `->colors()`) or a CSS color. A color name picks a matching text, background and border for light mode,
+  dark mode and printing. With a CSS color, the background and border are tinted from it unless you set them.
+- `background` and `border` are CSS colors used as given in both light and dark mode. Prefer color names when
+  the panel has dark mode.
+- A plain string, or a badge without `color`, is gray. Empty labels are skipped.
+- Badges stay on one line. When they do not fit the column, the first ones are shown followed by a `+N` badge for
+  the rest; a single badge that is too long ends with `…`. Widen the column, or let users widen it with
+  `resizableResourceColumns()`, to show more.
+- The column follows `align`, works with `action` (clicking the cell opens the action), and is drawn the same in
+  the timeline, Gantt and printouts. Compact layouts hide extra columns, badges included.
+- Anything other than a list of strings or arrays with these keys throws an `InvalidArgumentException`.
+
 Enable `resizableResourceColumns()` to drag the right edge of the name heading and each extra column heading
 in the timeline and Gantt (40–1000px). Double-click an edge or press Home to restore its configured width.
 Focus an edge and use Left/Right (10px, or 50px with Shift) to resize with the keyboard. Widths are saved only in
@@ -918,6 +951,32 @@ $scheduler->filtersForm([
 ```
 
 The fields update the scheduler as soon as they change (text inputs wait for typing to stop). Their state is passed as `$filters` to `resources()` and `modifyQueryUsing()`.
+
+#### Keeping the filters when users come back
+
+By default the filters return to their default values whenever the page is opened again, for example after
+editing a record and coming back. Call `persistFiltersInSession()` to keep them in the session instead, like
+Filament tables do:
+
+```php
+$scheduler
+    ->filtersForm([...])
+    ->persistFiltersInSession();
+```
+
+The saved values are kept separately for each page, scheduler component and signed-in user, the same way as the
+`dateRangePicker()` period. They are saved as soon as a field changes and filled in when the page is opened.
+It also accepts a closure returning a boolean. Your own `updatedWarpSchedulerFilters()` hook keeps working.
+
+#### Showing how many rows are listed
+
+Call `showResourceCount()` to show the number of rows next to the title, such as "128 rows". It counts the rows
+the scheduler received after `filtersForm()` and a period-dependent `resources()` are applied, updates whenever
+they change, and does not count group headings. Rows inside collapsed groups are counted. Narrow screens hide it.
+
+```php
+$scheduler->showResourceCount();
+```
 
 On a dashboard, a `SchedulerWidget` can follow the dashboard's own filters with Filament's `InteractsWithPageFilters`.
 When the page filters change, the scheduler fetches its events again. Read them as `$this->pageFilters` in your

@@ -5,6 +5,14 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-11-20
+
+### Added
+
+- **Badges in resource columns**: give a `resourceColumns()` column `badges` to show small colored badges in its cells instead of text, for example which materials of an order are ready. Each badge takes a label and an optional Filament color name or CSS color (with optional `background` and `border`). Color names adapt to dark mode and printing. Badges that do not fit the column are summed up as `+N`. Works in the timeline, Gantt and printouts, with `align` and `action`.
+- **`persistFiltersInSession()`**: keeps the `filtersForm()` values in the session, per page, scheduler component and user, so they are still set after leaving the page and coming back.
+- **`showResourceCount()`**: shows the number of listed rows next to the title, after filters and the period are applied. Translated into all 10 languages.
+
 ## [1.15.3] - 2026-11-20
 
 ### Fixed
