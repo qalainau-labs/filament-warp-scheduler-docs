@@ -5,6 +5,17 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] - 2026-11-21
+
+### Added
+
+- Optional working-day Gantt dependency scheduling for all-day tasks, including holidays, working-day durations and lag, and pulling successors earlier against all predecessor constraints.
+- Reminders for each occurrence of recurring events, excluding deleted occurrences and sending moved occurrences at their new time.
+- Optional preparation, cleanup and travel buffers on timed events, with timeline/day/week bands and buffer-aware overlap checks and free-slot search.
+- Optional `poll()` refreshes visible events in the background, preserving the current view and pausing during edits, modals, pending drafts and hidden tabs.
+- Gantt and resource-timeline milestones with draggable diamonds, right-side titles and centered dependency arrows; events with identical start and end timestamps now render as diamonds instead of thin bars, with `EventSource::milestone()` to override detection.
+- `Scheduler::timeMarkers()` and `timeRanges()` add labeled, timezone-aware lines and translucent bands behind timeline, Gantt and day/week events, fetched for each displayed period.
+
 ## [1.16.0] - 2026-11-20
 
 ### Added

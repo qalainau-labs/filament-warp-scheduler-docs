@@ -74,7 +74,7 @@ Only the rows and the time range on screen are drawn, and events are loaded per 
 - **Recurring events**: RFC 5545 rules expanded on the server for the visible range, with the wall-clock time kept across daylight saving changes. Edit or delete one occurrence, this and following, or the whole series. `RecurrenceInput` adds a repeat section to your form, including the nth weekday of a month and chosen months.
 - **Availability and conflicts**: business hours, per-resource and date exceptions such as holidays, blocked time, and capacity. Rules reject or only warn, are checked on the server before saving, and are previewed in red or amber while dragging.
 - **Utilization**: booked time over available time per resource, per group and per hour, day, week or month, shown as meters, group heatmaps and a histogram.
-- **Gantt**: progress, baselines, dependency arrows (finish-to-start, start-to-start, finish-to-finish and start-to-finish, with lag), the critical path, and successors that move along when a task is pushed later. Link tasks by dragging between bars.
+- **Gantt**: progress, baselines, dependency arrows (finish-to-start, start-to-start, finish-to-finish and start-to-finish, with lag), the critical path, and successors that move along when a task is pushed later, with optional working-day scheduling and pulling successors earlier. Link tasks by dragging between bars.
 - **Data**: events shared by several resources (`belongsToMany`), read-only events from any callback, search, reminders as database notifications, CSV and XLSX export and `.ics` import.
 - **iCal**: download the visible range as `.ics`, or subscribe from Google Calendar, Apple Calendar or Outlook with a personal link that keeps the user's filters and tenant.
 - **Two-way calendar sync**: connect a Google or Microsoft calendar to a resource. Changes on either side are synced through queued jobs, push notifications and delta queries.
@@ -369,6 +369,37 @@ An event model can implement `Schedulable` (`getSchedulerColumns()`) to declare 
 
 All-day events are floating dates, like iCalendar: they stay on the same day in every time zone.
 
+#### Preparation, cleanup and travel buffers
+
+Use `buffers(before: ..., after: ...)` for minutes reserved around the event body. For a home visit or salon appointment:
+
+```php
+EventSource::make(Visit::class)->buffers(before: 15, after: 30); // preparation / travel and cleanup
+EventSource::make(Appointment::class)->buffers(before: 'prep_minutes', after: 'cleanup_minutes');
+EventSource::make(Visit::class)->buffers(before: fn (Visit $record): int => $record->travel_minutes);
+```
+
+Each value accepts an integer, a model column name, a record closure, or `null` (zero).
+Values become non-negative integer minutes. All-day events always have zero buffers.
+A column or closure value is capped at `max` minutes (default `240`, set it with `buffers(before: 'prep_minutes', after: 'cleanup_minutes', max: 120)`): the scheduler reads events that far outside the visible range to find overlapping buffers, without loading every event to find the longest one.
+Without `buffers()`, behavior and event payload size stay unchanged.
+
+`NoOverlap` counts both events over `[start - before, end + after)`; touching endpoints do not overlap.
+**Find a free slot** (including `FreeSlotFinder::findSlots()`) reserves buffers around the candidate
+as well as existing events, and returns the start and end of the event body. Preparation and cleanup
+must also fit inside availability and avoid blocked time when searching for a free slot.
+For a new event without a record, only integer defaults apply; column and closure values are zero
+until a record is available. Fetching includes events outside the period whose buffers reach into it.
+Record-dependent buffers require scanning the source's filtered resource records to determine the
+fetch extension; constant minutes avoid that extra scan.
+
+Faint hatched bands appear before and after the body in the resource timeline and vertical day/week
+time grids (including resource views). They move with drag and resize previews and keep their own
+length when the body is resized. Only the body handles clicks and dragging; a band leaves the empty
+cell beneath it interactive. Bands also adapt to dark mode. Month, Board, Gantt, all-day rows and
+stacked day-cell layouts do not draw buffers.
+
+
 Dates are stored as wall-clock times in the app time zone (`app.timezone`), as Laravel does. The scheduler shows them
 in its own time zone (`timezone()`, by default Filament's), and the app, Filament and the scheduler can each use a
 different zone.
@@ -542,6 +573,10 @@ EventSource::make(Booking::class)
 List the scheduler components in `filament-warp-scheduler.reminders.components` and run
 `Schedule::command('warp-scheduler:send-reminders')->everyMinute()`. Each reminder is sent once; moving an event
 sends it again for the new time.
+
+Recurring events receive reminders for each occurrence. Deleted occurrences receive none, and moved occurrences
+receive reminders at their new time. In `remindUsing()`, `$startsAt` is the occurrence's start and `$record` is the
+original record of the recurring series.
 
 ### Import, export and other data
 
@@ -920,6 +955,39 @@ $scheduler
 - Both only change what is drawn. Events are still saved and shown in the scheduler's `timezone()`, dragging snaps
   as before, and the conflict rules do not look at the shading.
 - An unknown second time zone, or the same as `timezone()`, is ignored.
+
+#### Time markers and ranges
+
+Add a deadline line or a busy-season band with `timeMarkers()` and `timeRanges()`:
+
+```php
+$scheduler
+    ->timeMarkers([
+        ['at' => '2026-12-15 17:00', 'label' => 'Delivery deadline', 'color' => 'danger'],
+    ])
+    ->timeRanges([
+        ['from' => '2026-12-01', 'to' => '2026-12-15', 'label' => 'Busy season', 'color' => 'warning'],
+    ]);
+```
+
+Dates accept strings or Carbon instances; strings without an offset use the scheduler's timezone.
+Colors are optional Filament color names. Lines and translucent bands span all resource rows in the timeline
+and Gantt, or the matching day/resource columns in day/week time grids. Small labels appear near the header
+(or beside horizontal lines). Annotations sit behind events, do not intercept clicks or drags, adapt to dark
+mode, and render labels as plain text.
+
+Both methods also accept `fn (CarbonImmutable $from, CarbonImmutable $to): array`, just like `holidays()`.
+The callback receives the requested period in the scheduler's timezone. Annotations are fetched together
+with events on navigation; only markers in `[from, to)` and ranges overlapping that period are returned.
+
+```php
+use Carbon\CarbonImmutable;
+
+$scheduler->timeMarkers(fn (CarbonImmutable $from, CarbonImmutable $to): array => [
+    ['at' => $from->addDays(2)->setTime(17, 0), 'label' => 'Delivery deadline', 'color' => 'danger'],
+]);
+```
+
 
 ### Dependent fields in the event form
 
@@ -2100,12 +2168,56 @@ tasks with a value come first, smallest first, then the tasks without one in the
 EventSource::make(Task::class)->resource('project_id')->progress('progress')->order('position');
 ```
 
+#### Milestones
+
+Events with identical start and end timestamps automatically appear as diamonds in Gantt and resource
+timelines. Use `milestone()` to choose the condition explicitly:
+
+```php
+EventSource::make(Task::class)
+    ->resource('project_id')
+    ->milestone(fn (Task $record): bool => $record->is_milestone);
+```
+
+`milestone(true)` marks every event, `milestone(false)` disables diamonds, and `milestone()` (or `null`)
+restores automatic detection. A diamond uses the event color with its title on the right. Dragging shifts
+both timestamps equally; milestones have no resize handles in these views. Dependency arrows attach to
+the diamond center, and zero-duration successors retain zero duration when rescheduled. Day/week vertical
+calendars and month views keep their existing short-event rendering. For a point in time, store identical
+start and end timestamps; the condition controls appearance and does not rewrite stored dates.
+
+#### Scheduling on working days and pulling tasks earlier
+
+```php
+$scheduler
+    ->dependencies(workingDays: true, pullForward: true)
+    ->useWarpDatePicker();
+
+// Or supply the calendar directly:
+$scheduler
+    ->dependencies(workingDays: true, pullForward: true)
+    ->workingDays([1, 2, 3, 4, 5])
+    ->holidays(['2026-11-03' => 'Culture Day']);
+```
+
+Both options default to `false` and accept booleans or closures. With `workingDays: true`, all-day successors
+start on a working day and keep their duration in working days. Lag is also counted in working days:
+1440 minutes means one working day, with fractions rounded up. All-day end dates are exclusive.
+`workingDays()` sets the weekdays; otherwise the Warp DatePicker calendar's working weekdays are used,
+falling back to Monday through Friday. `holidays()` supplies days off; otherwise `useWarpDatePicker()`
+skips the calendar's holidays and company closures. Timed tasks continue to move in seconds.
+
+With `pullForward: true`, successors also move earlier when their predecessors do. Each successor is placed
+at the latest constraint from all its predecessors (FS, SS, FF or SF, including lag). Without this option,
+successors only move later. The two options can be used separately or together. The server returns the
+rescheduled tasks to redraw them after saving; the drag preview still uses calendar time.
+
 #### Calculating dates yourself
 
-When a task is moved later (by dragging it, or with new dates in the edit modal), the scheduler moves its successors
-along in calendar time: a successor of a task that now ends on Friday evening starts on Friday evening, even if nobody
-works at the weekend. If your app plans with working hours, holidays or its own rules, turn this off and move the
-successors yourself:
+By default, when a task is moved later (by dragging it, or with new dates in the edit modal), the scheduler moves
+its successors along in calendar time: a successor of a task that now ends on Friday evening starts on Friday evening, even if nobody
+works at the weekend. For working-hour calculations or other custom rules beyond the working-day option above,
+turn this off and move the successors yourself:
 
 ```php
 $scheduler
@@ -2172,6 +2284,19 @@ Schedule::command('warp-scheduler:renew-calendar-watches')->daily();
 ```
 
 Push notifications need a public `https` URL. Without one, the scheduled sync keeps calendars up to date.
+
+### Polling
+
+Opt in to receiving other people's changes while the page is visible, using the same `poll()` syntax as Floor:
+
+```php
+$scheduler
+    ->poll('30s'); // re-read the events in the visible period and resources
+```
+
+Polling is off by default. `poll()` uses 30 seconds; pass `'2m'`, an integer number of seconds, or a closure returning one of these. The minimum is 5 seconds, as in Floor. `poll(null)` disables it. `getPollInterval()` returns milliseconds or `null`.
+
+Polling uses the current filters and updates only resources whose events or constraints changed. It keeps the scroll position, view, selection and open quick info, without reloading the page or re-rendering Livewire. It pauses during dragging, resizing, range selection, form or confirmation modals, unsaved `batchSave()` drafts and saving, and while the tab is hidden. When the pause ends it reads once immediately. Requests do not overlap; failed reads keep the current display and retry at the next interval.
 
 ## Browser tests and screen readers (JavaScript)
 
@@ -2274,7 +2399,7 @@ On touch screens, press and hold an event to drag it.
 ## Limitations
 
 - Week, day, month, year and list views show every event together and are limited to `calendarResourceLimit()` resources. Use the filters for larger boards.
-- Events shared by several resources (`resourcesRelationship()`) cannot be recurring, and reminders are not sent for the occurrences of recurring events. You can [send your own occurrence reminders](#reading-the-occurrences-in-your-own-code).
+- Events shared by several resources (`resourcesRelationship()`) cannot be recurring.
 - Events from `eventsUsing()` are read-only. A date range for printing works in the timeline, Gantt and list views.
 - Images from other sites appear in printouts only when those sites allow CORS.
 - Recurring events from Google or Outlook are imported as single occurrences. Recurring series created in the scheduler are exported with their rule.
