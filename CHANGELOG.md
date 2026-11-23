@@ -5,6 +5,31 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.18.0] - 2026-11-23
+
+### Added
+
+- Gantt task splitting with `taskSplitting()`: right-click a bar and choose **Split here**, then drag each part; successors follow the last part and every change goes through the usual checks. Parts are stored in the new `warp_scheduler_task_segments` table (run `php artisan migrate`; without `taskSplitting()` the table is never read). Translated into all 10 languages.
+- Gantt parent tasks: `parent()` on an event source nests subtasks under their parent, with collapsible rows, a summary bar and weighted progress. Dragging a parent moves all its subtasks with the usual checks, and with `rollUp` (default) the parent's dates follow its subtasks. Translated into all 10 languages.
+- Gantt `startNoEarlierThan()` and `deadline()` on an event source, read from your model's columns or a closure: tasks can't start before their date (also when `dependencies()` moves them, including `pullForward` and `workingDays`), and tasks that end after their deadline get a red mark, with both dates in the tooltip and accessible text. Translated into all 10 languages.
+- `SlotPicker` form field: pick a day and one of its free times (from the business hours, blocked time, existing events, buffers and conflict rules of a scheduler), filling the start, end and resource. Works in panel forms and in public booking pages, sends only times to the browser, and checks the choice again on the server when the form is submitted. Translated into all 10 languages.
+- `recurringAcrossResources()` lets events shared by several resources (`resourcesRelationship()`) repeat: each occurrence is drawn on every resource, an occurrence can be moved on one row with the usual “this / following / all” choice, and every resource of every changed occurrence is checked against the conflict rules. Without it, nothing changes.
+- `undoRedo()` adds Undo and Redo (buttons and Ctrl+Z / ⌘Z, Ctrl+Shift+Z) for drags, resizes, moves of several events, the unscheduled pool, renaming, board cards and deleting. The history is kept on the server and each undo goes through the same permission, tenancy, conflict-rule and save-callback checks as a normal change. Translated into all 10 languages.
+- `RequiresSkills` conflict rule with `EventSource::requiredSkills()` and `Scheduler::resourceSkills()`: only resources with every required skill can take an event, checked on the server at every entry point, and the rows of the people who do not fit are dimmed while you drag. Translated into all 10 languages.
+- `highlightAvailableTime()` paints, when a drag starts, where the event could be dropped on every loaded row (green where it fits, yellow where only a warning rule is broken).
+- `summaryRow()` adds rows of totals under the resource timeline and the Gantt chart (for example the number of bookings or the revenue per day), counted on the server with your callback, with optional subtotals for each resource group (`groups: true`). Translated into all 10 languages.
+
+### Fixed
+
+- All-day events whose start and end use the same column (for example `->start('due_on')->end('due_on')->allDay()`, such as due dates) could no longer be moved in the month, week and timeline views when `resizable(false)` was set (since 1.17.0): dropping them on another day was taken as a resize and refused. They move again; stretching them to two days or more is still refused.
+- `visibleHours()` with an end earlier than the start (for example `visibleHours('18:00', '06:00')` for night shifts) drew a single one-minute column and placed events wrongly. Each day now runs from the start time to the end time of the next morning, in the timeline (day and week zooms) and the week and day views, including dragging, resizing, fetching, business hours, the current-time line and daylight saving nights. Settings whose end is after the start are unchanged.
+- Importing an `.ics` file ignored the conflict rules (`conflictRules()`): on a board that refuses overlaps, the imported events were added on top of the existing ones. Each event of the file is now checked like a drag or a form; the ones that break a rule are skipped and the others are imported. The notification says how many were imported, and lists the skipped events by name.
+- In the Gantt chart, the linked events that moved along with a task (`dependencies()`, including `workingDays` and `pullForward`) ignored the conflict rules, so a successor could be pushed onto another event of its row. When any moved successor would break a rule, the whole change is now refused: nothing moves, and the notification names the event and the reason. This applies to dragging, the edit modal and creating a link.
+- In Japanese, Chinese and Korean, the row of dates under the month in the timeline and Gantt chart was empty in the month view: the label (for example “16日 月”) did not fit the day column, and nothing was drawn instead. The day now falls back to a shorter form (“16日”, then “16”).
+- A time marker and a time range that were close together drew their labels on top of each other. Labels that would overlap now go on the next line.
+
 ## [1.17.0] - 2026-11-21
 
 ### Added

@@ -559,7 +559,25 @@ The event is drawn on every resource; dragging one row moves that assignment, an
 EventSource::make(Meeting::class)->resourcesRelationship('rooms');
 ```
 
-Use a multiple `Select::make('rooms')->relationship('rooms', 'name')` in the form. Recurring events need a resource column.
+Use a multiple `Select::make('rooms')->relationship('rooms', 'name')` in the form.
+
+To make such events recurring (a weekly meeting with a host and a room), opt in on the event source:
+
+```php
+EventSource::make(Meeting::class)
+    ->resourcesRelationship('rooms')
+    ->recurringAcrossResources();
+```
+
+- Each occurrence is drawn on every resource of the event, like the other shared events, and the recurrence field
+  (`RecurrenceInput`) of the form repeats them all.
+- Dragging an occurrence on one row asks “this event / this and following / all events”, as usual. It moves that row's
+  assignment to the row you drop on; the other resources keep theirs, and the time changes for all of them. An
+  occurrence moved on its own keeps its own resources.
+- The conflict rules are checked for every resource of every changed occurrence; if one of them is refused, nothing is
+  saved. Reminders, `.ics` exports and utilization count each occurrence once.
+- Without `recurringAcrossResources()`, nothing changes: a shared event with a recurrence rule in the database is still
+  shown once on each of its rows, as a single event.
 
 Reminders send a Filament database notification before an event starts:
 
@@ -694,6 +712,27 @@ $scheduler
 ```
 
 To change these settings per timeline zoom as well, see [Settings per zoom](#settings-per-zoom).
+
+#### Night shifts: a day that runs past midnight
+
+When the end of `visibleHours()` is earlier than its start, each day runs from the start time to the end time of the
+next morning, drawn as one column (week and day views) or one block (the day and week zooms of the timeline):
+
+```php
+$scheduler->visibleHours('18:00', '06:00'); // Monday 18:00 → Tuesday 06:00, then Tuesday 18:00 → Wednesday 06:00…
+```
+
+- A night shift from 22:00 to 04:00 is one box; it is not cut at midnight. Dragging, resizing and the drag time label
+  work across midnight, and the times you save are the real times (Tuesday 03:00 stays Tuesday 03:00).
+- Each night is labelled with the date it **starts** on. The “Sunday” column shows Sunday evening and Monday morning.
+- Events are fetched up to the end of the last morning, and business hours, blocked time, the current-time line and
+  `scrollTime()` follow the same night. Conflict rules are checked on the real times, as before.
+- On daylight saving nights the column is one hour shorter or longer (11 or 13 hours for `18:00`–`06:00` in New York),
+  and the hour labels follow the wall clock.
+- The same works in `viewSettings()` and `zoomSettings()` (`'visibleHours' => ['18:00', '06:00']`).
+- An end of `'00:00'` means midnight (`visibleHours('08:00', '00:00')` shows 08:00 to 24:00). The same start and end
+  (`'06:00', '06:00'`) shows 24 hours from that time.
+- `hideNonWorkingHours()` is unchanged: it uses the earliest start and latest end of the business hours on the same day.
 
 More views are available on demand (the default set is `SchedulerView::defaults()`):
 
@@ -1522,7 +1561,7 @@ What else happens depends on where the change came from:
 | Several selected events moved together | None of them is moved |
 | The create or edit modal | The modal stays open with what the user typed, so they can correct it |
 | Delete | The event stays, and the confirmation stays open |
-| An `.ics` import | No event of the file is imported |
+| An `.ics` import | No event of the file is imported (an event that only breaks a conflict rule is skipped instead, and the others are imported) |
 
 `ChangeRejected` can also be thrown from `unscheduleUsing()`, `onExternalDrop()` and `onAdopt()`.
 
@@ -1732,6 +1771,46 @@ press **Search**, and the free times are found by the scheduler as above.
   unknown resources are dropped and the dates and lengths are kept within the limits.
 - To use another AI or your own rules, bind your class to `Qalainau\FilamentWarpScheduler\Ai\ReadsSlotRequests`
   in a service provider.
+
+### A form field to pick a free time (`SlotPicker`)
+
+`SlotPicker` is a form field: pick a day in a small month calendar (days without free times are greyed out), then one
+of that day's free times. It fills the start, and optionally the end and the resource. Put it in a create form of your
+panel, or in a booking page you build yourself with Livewire (it also works for visitors who are not logged in).
+
+```php
+use Qalainau\FilamentWarpScheduler\Forms\SlotPicker;
+
+SlotPicker::make('starts_at')                          // state: the start, 'Y-m-d H:i:s' in the scheduler's time zone
+    ->scheduler(StaffSchedule::class)                   // a page or Livewire component implementing HasScheduler
+    ->eventSource(Booking::class)                       // which event source the new event belongs to (default: the first)
+    ->duration(fn (Get $get): int => Service::find($get('service_id'))?->minutes ?? 60)   // minutes
+    ->resource(fn (Get $get) => $get('staff_id'))       // a resource key, or null for “anyone”
+    ->resourceField('staff_id')                         // fill this field with the chosen resource
+    ->endField('ends_at')                               // fill this field with the end
+    ->step(30)                                          // times every 30 minutes (default)
+    ->daysAhead(60)                                     // how far ahead people can book (default 60 days)
+    ->minimumNotice(120);                               // not sooner than 2 hours from now (default 0)
+
+Hidden::make('staff_id'); Hidden::make('ends_at');      // or visible fields of your own
+```
+
+- Free times come from the scheduler you name: its resources (and tenant), business hours, blocked time, existing
+  events, buffers and every conflict rule that refuses (the same checks as **Find a free slot**). With “anyone”, each
+  time is offered once and goes to the first free resource in the scheduler's order.
+- The field only sends times and resource keys to the browser, never the titles or details of other events.
+- **Checked again on the server**: when the form is submitted, the chosen time, length and resource are checked again
+  (free, within `daysAhead()` and `minimumNotice()`, on the step, a resource of that scheduler). A time that was taken in
+  the meantime, or a value changed in the browser, fails validation with “This time is no longer available. Please
+  choose another time.”
+- Saving is yours (`create()` of your model, or the scheduler's create action). To be sure two visitors cannot book the
+  same time at the same moment, check again inside your save while holding a lock, as in
+  [Preventing double bookings when two people book at the same moment](#preventing-double-bookings-when-two-people-book-at-the-same-moment).
+- On a public page, add rate limiting to the route as you would for any form.
+- The times are shown in the scheduler's time zone, written under the field. On the night the clocks go back, the
+  repeated hour is not offered (a 'Y-m-d H:i:s' value could not tell the two apart). Business hours that run past
+  midnight are not supported by the free-time search.
+- The field loads its own small script and stylesheet only on pages where it is used.
 
 ### Unscheduled pool
 
@@ -2076,9 +2155,52 @@ $scheduler
     ]);
 ```
 
+The rules apply to every way an event is placed: dragging and resizing, the create and edit modals, the unscheduled pool, the board, drafts, drops from outside and other schedulers, and `.ics` imports. An `.ics` import skips the events that break a rule and imports the others; the notification lists the skipped events. In the Gantt chart, the successors moved by `dependencies()` are checked too: if any of them would break a rule, the whole change is refused and nothing moves.
+
 When every event source is `allDay(true)`, hours of the day mean nothing, so the shading is drawn per day: a day with any working time is left white, and only days without working time (weekends, holidays, days off) are shaded. A scheduler with a timed source keeps the hourly shading.
 
 Weekly hours and date exceptions per resource (or for all resources, such as holidays) can also be stored in `warp_scheduler_availabilities`, and blocked time in `warp_scheduler_blocks`. To compute availability yourself, for example with `spatie/opening-hours` or `laraveljutsu/zap`, return intervals from `availabilityUsing(fn (Model $resource, CarbonImmutable $from, CarbonImmutable $to) => [[$start, $end], ...])`.
+
+#### Matching skills: only people who can do the job
+
+Give each event the skills it needs and each resource the skills it has, then add `RequiresSkills`:
+
+```php
+use Qalainau\FilamentWarpScheduler\Conflicts\RequiresSkills;
+
+$scheduler
+    ->resourceSkills(fn (Technician $resource): array => $resource->skills->pluck('name')->all())
+    ->conflictRules([
+        RequiresSkills::make(),             // refuse; or ->warn() to save and show a warning
+    ]);
+
+EventSource::make(Visit::class)
+    ->requiredSkills(fn (Visit $record): array => $record->required_skills ?? []);   // e.g. ['Forklift', 'First aid']
+```
+
+- An event fits a resource when the resource has **every** skill the event needs. An event that needs no skills fits
+  everyone; an event without a resource (in the unscheduled pool) is not checked.
+- Skills are compared as exact strings (`'Forklift'` and `'forklift'` are different).
+- While you drag an event, an unscheduled pool item or a board card, the rows of the people who do not fit are dimmed,
+  and dropping there shows the usual red (or yellow with `->warn()`) placement. The default message is
+  “Aiko Sato does not have the required skills: Forklift.”; change it with `->message()`.
+- Like the other rules, `RequiresSkills` is checked on the server at every entry point listed above, from your models
+  (the skills sent to the browser are never trusted). The skills are only sent to the browser when the rule is used.
+- With `RequiresSkills`, `onExternalDrop()` and `onAdopt()` must return the saved model so its skills can be checked;
+  a callback that returns only `true` or `false` is refused and rolled back.
+
+#### Showing where an event can go while dragging
+
+```php
+$scheduler->highlightAvailableTime();
+```
+
+When a drag starts, every loaded row is painted where the dragged event (with its length and buffers) could be dropped
+without breaking a rule that refuses: green where it fits, yellow where only a `->warn()` rule is broken, and no paint
+where it would be refused. The rules checked are the ones the browser knows (`NoOverlap`, `WithinAvailability`,
+`NoBlockedTime` and `RequiresSkills`; a `CustomRule` is only checked when you drop). It is computed once when the drag
+starts, for the visible period and the loaded rows, and works in the resource timeline and the week
+and day views (not in the Gantt chart, whose rows are tasks, nor in the month, year and list views). The server still checks every drop.
 
 ### Holidays and business hours from Warp DatePicker
 
@@ -2120,6 +2242,61 @@ capacity of `NoOverlap`; the whole day when no working hours are set).
 - `reducesAvailability()` takes their time off the available time (vacation, sick leave). On a day off the person has
   no available time, so the row shows no percentage for that day; in a week the other days still count. Bookings on
   that day still count as booked time, so a week with bookings during a vacation shows a higher percentage.
+
+### Undo and redo
+
+```php
+$scheduler->undoRedo();            // remembers the last 20 changes
+$scheduler->undoRedo(limit: 50);
+```
+
+Adds Undo and Redo buttons to the toolbar, and the keys Ctrl+Z / ⌘Z (undo) and Ctrl+Shift+Z / ⌘⇧Z / Ctrl+Y (redo)
+while the scheduler has the focus (not while typing in a field).
+
+- **What can be undone**: moving and resizing by dragging (also to another row), moving or copying several events at
+  once (undoing a copy removes the copies), dropping an event from the unscheduled pool or back into it, renaming in
+  place, moving a board card, and deleting an event (with the Delete key or the delete action).
+- **Not undone**: changes made in the create and edit modals, `.ics` imports, occurrences of recurring events, moves
+  that also shifted linked Gantt tasks (`dependencies()`), saving drafts, the automatic scheduling of the pool, drops
+  from outside (`onExternalDrop()`, `onAdopt()`) and reordering inside a slot. Those changes are saved as usual and are
+  simply not added to the history.
+- The history is kept on the server, in the session, for each user, page and scheduler (and tenant). The browser only
+  says “undo” or “redo”; the values come from the server.
+- Undoing goes through the same checks as a normal change: permissions (your policy and `movable()` / `editable()`),
+  tenancy, the conflict rules and your save callbacks (`moveUsing()` and the others). When one of them refuses, nothing
+  changes and the usual message is shown.
+- If someone else changed the same event after your edit, it is not undone (“This event changed after your edit, so it
+  can't be undone.”) and that step is dropped from the history.
+- Undoing a delete restores a soft-deleted model, or creates the row again with the same key and columns (this needs
+  the `create` permission; when the key is already used, it is not restored).
+- A new change clears the redo history. Read-only schedulers (`readOnly()`) show no buttons.
+
+### Summary rows
+
+Show totals under the timeline: how many bookings or how much money per day, week or month. You decide what to count:
+
+```php
+use Illuminate\Support\Collection;
+
+$scheduler
+    ->summaryRow(fn (Collection $records): int => $records->count(), label: 'Bookings')
+    ->summaryRow(fn (Collection $records): string => '$'.number_format($records->sum('price')), label: 'Revenue', groups: true);
+```
+
+- Each call adds one row at the bottom of the resource timeline and the Gantt chart, in the order you call it. With
+  `utilization()` as well, the summary rows sit above the utilization chart.
+- The cells follow the zoom, like utilization: hours in the day zoom, days in the week and month zooms, weeks in the
+  quarter zoom and months in the year zoom.
+- `$records` holds the Eloquent models of every event source whose **start** falls in that cell, after your filters,
+  tenancy and `modifyQueryUsing()`. The callback also receives `$start` and `$end` (the cell, in the scheduler's time
+  zone) and `$resource` (the group key for a group subtotal, `null` for the total row).
+- The totals are counted on the server for the whole visible period, including rows that are not loaded yet. They are
+  fetched again after a drag, a resize or an edit.
+- `groups: true` also draws the subtotal of each resource group (`groupResourcesBy()`) on the group's row.
+- Return a string, a number or `null` (an empty cell). Text is drawn as plain text and shortened with “…” when it does
+  not fit the cell.
+- Each occurrence of a recurring event is not a separate model, so `$records` contains the stored records only.
+- The label defaults to the translated “Total”. Summary rows are not drawn in the week, day, month, year and list views.
 
 ### Hooks
 
@@ -2185,6 +2362,79 @@ both timestamps equally; milestones have no resize handles in these views. Depen
 the diamond center, and zero-duration successors retain zero duration when rescheduled. Day/week vertical
 calendars and month views keep their existing short-event rendering. For a point in time, store identical
 start and end timestamps; the condition controls appearance and does not rewrite stored dates.
+
+#### Parent tasks and subtasks
+
+```php
+EventSource::make(Task::class)
+    ->resource('project_id')
+    ->progress('progress')
+    ->parent('parent_id');                    // the key of the parent task in the same event source, or fn (Task $record) => ?key
+    // ->parent('parent_id', rollUp: false);  // draw the parent from its subtasks without saving its dates
+```
+
+The parent is read from your model; this adds no table or column. Without `parent()`, the Gantt chart is unchanged.
+
+- A task with subtasks becomes a parent row: bold, with a triangle to collapse or expand it (or ← / → on the row). Its
+  subtasks are indented below it (subtasks of subtasks too, up to 5 levels deep). The collapsed state is remembered in
+  the browser. A collapsed parent shows its subtasks as light marks on its bar.
+- The parent's bar runs from its earliest subtask to its latest one. With `progress()`, its progress is the average of
+  its subtasks weighted by their length.
+- Dragging the parent's bar moves all of its subtasks by the same amount, saved at once with the same checks as moving
+  several events (permissions, tenancy, conflict rules for each subtask: if one is refused, nothing moves); linked
+  successors (`dependencies()`) are moved afterwards. A parent bar has no resize handles.
+- With `rollUp` (the default), moving, creating or deleting a subtask saves the parent's start and end so they match its
+  subtasks, through your save callbacks (`moveUsing()`), and moves the parent's own successors.
+- A task can't be inside its own subtask: such a change is refused (“A task can't be inside its own subtask.”), and a loop
+  already in your data is drawn as plain rows. A subtask whose parent is in another project, or not found, is a plain row.
+- Dependencies can link parents and subtasks; a link from a parent uses the end of its whole bar.
+- Parent rows are found from every task of the visible projects (not only those in the visible period), so a parent's
+  bar is right even when some subtasks are outside the period.
+
+#### Splitting a task
+
+```php
+$scheduler->taskSplitting();
+```
+
+Right-click a task bar in the Gantt chart and choose **Split here**: the task becomes two parts with a gap of one step
+after the split (one day in the day-based zooms, the next working day with `dependencies(workingDays: true)`). The
+parts are joined by a dotted line and each can be dragged on its own; drag the first part to move the whole task.
+Dropping a part onto the next one joins them again; when one part is left, the task is a plain task again.
+
+- The task's start and end columns keep the whole span (the start of the first part and the end of the last one), so
+  your queries, exports and successors keep working. Successors (`dependencies()`) follow the end of the last part,
+  `startNoEarlierThan()` applies to the first part, and a parent task's bar covers all the parts.
+- Every change goes through the usual checks (permissions, tenancy, the conflict rules for each part, your save
+  callbacks), in one database transaction with the task's columns. Parts of a task can't overlap.
+- The parts are stored in a new table, `warp_scheduler_task_segments`. Run `php artisan migrate` after updating
+  (also when you published the earlier migrations: the new one runs from the package). Without `taskSplitting()`, the table is never read, so nothing
+  changes even if you have not migrated. With `taskSplitting()` but without the table, the Gantt chart still works and
+  **Split here** shows a message asking you to run the migration.
+
+#### Start-no-earlier-than dates and deadlines
+
+```php
+EventSource::make(Task::class)
+    ->resource('project_id')
+    ->startNoEarlierThan('not_before')    // a date or datetime column of your model, or fn (Task $record) => ?CarbonInterface
+    ->deadline('due_on');                  // the same
+```
+
+The values are read from your model; this adds no table or column. A task whose value is `null` has no constraint or
+deadline, so nothing changes for it.
+
+- **Start no earlier than**: the task can't be dragged, resized or saved in the edit modal to start before that date
+  (“Integration can't start before 2026-11-24 09:00.”). When `dependencies()` moves it as a successor, it stops at that
+  date instead: a successor starts at the later of what its predecessors require and its own date, and `pullForward`
+  never pulls it before its date. With `workingDays: true`, the date moves to the next working day.
+- **Deadline**: only shown, never enforced. A small flag marks the date on the task's row, and a task that ends after
+  it gets a red “!” at its end, also in the resource timeline. The tooltip and the accessible text say “Deadline: …” and
+  “Overdue by 2 days”. An all-day task may end on its deadline day; a timed task is late from the deadline's time, and
+  each started 24 hours count as a day.
+- A start date is marked with a small bracket on the task's row, and the tooltip says “Not before …”.
+- A column name that does not exist on the model, or a value that is not a date, stops with a message naming the model
+  and the column.
 
 #### Scheduling on working days and pulling tasks earlier
 
@@ -2399,7 +2649,7 @@ On touch screens, press and hold an event to drag it.
 ## Limitations
 
 - Week, day, month, year and list views show every event together and are limited to `calendarResourceLimit()` resources. Use the filters for larger boards.
-- Events shared by several resources (`resourcesRelationship()`) cannot be recurring.
+- Events shared by several resources (`resourcesRelationship()`) are recurring only with `recurringAcrossResources()`. Overlap checks of such a series cover its first 1,000 occurrences.
 - Events from `eventsUsing()` are read-only. A date range for printing works in the timeline, Gantt and list views.
 - Images from other sites appear in printouts only when those sites allow CORS.
 - Recurring events from Google or Outlook are imported as single occurrences. Recurring series created in the scheduler are exported with their rule.
