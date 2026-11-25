@@ -1747,30 +1747,107 @@ and opens your create form with the time and the resources filled in. Off by def
 
 #### Typing the request as a sentence (AI)
 
-When an Anthropic API key is set, the panel also has a field for a sentence such as "a free hour next week in the
-afternoon for Tanaka and room A". **Fill in the conditions** sends the sentence to Claude, which only turns it into
-the conditions above (length, resources, dates, hours, days). It does not search: you check the conditions, then
-press **Search**, and the free times are found by the scheduler as above.
+With an AI reader available, the panel also has a field for a sentence such as "a free hour next week in the
+afternoon for Tanaka and room A". **Fill in the conditions** turns it into the conditions above (length, resources,
+dates, hours, days). Check the conditions, then press **Search**; the scheduler finds the free times.
+
+#### Which AI service is used
+
+`freeSlotSearch()` takes the first of these that your app has, and shows no sentence field when it has none:
+
+1. **Your own binding of `ReadsSlotRequests`**: implement `Qalainau\FilamentWarpScheduler\Ai\ReadsSlotRequests` and bind it in your service provider.
+2. **An AI gateway bound to `warp.ai`**. [Warp SaaS](https://warpui.com) binds one for you: it picks the model, counts each request per company, person and feature, and stops at the limits of the company's plan. Without Warp SaaS, write your own (below).
+3. **`services.anthropic.key`**: Warp Scheduler calls Claude itself. *Deprecated*: this keeps working in 1.x, and will be removed in 2.0. Move to a gateway when you can.
+
+With a gateway, name what you count with `aiFeature()`. Warp SaaS counts and limits each name on its own; without it,
+requests are counted as `scheduler.slot_request`. The name can also be a closure; empty names are ignored.
+
+```php
+$scheduler->freeSlotSearch()->aiFeature('meeting_search');
+```
+
+Before the controls are shown, Warp Scheduler asks the gateway whether the feature can be used now (`unavailable()`).
+When it answers with a sentence, the sentence field and button are disabled and the reason is shown below them.
+The answer is remembered once per Scheduler object. Direct calls are refused too. When a request fails, the user sees
+the gateway's sentence (`userMessage()` on the exception), or the translated AI failure message. Internal exception
+messages are never shown on the gateway path.
+
+**What the gateway receives.** One array per press of *Fill in the conditions*:
+
+| Key | Value |
+| --- | --- |
+| `v` | `1` |
+| `plugin`, `feature` | `'scheduler'`, `'slot_request'` |
+| `meter` | Your `aiFeature()` name. Left out without it. |
+| `tier` | `'fast'`. The gateway picks the model. |
+| `instructions` | Rules, today's date and weekday, the scheduler's time zone, and the keys and names of up to 500 visible resources. Never the user's sentence. |
+| `input` | The user's sentence, limited to 500 characters. Treat it as data, not instructions. |
+| `schema` | JSON schema for `duration`, `resources`, `together`, `from`, `to`, `timeFrom`, `timeTo`, `weekdays`. All properties are required and accept `null`; extra properties are forbidden. |
+| `max_output_tokens` | `1024` |
+| `tenant`, `user` | The current Filament tenant (or `null`) and the signed-in user. |
+| `locale` | The app's locale, for the gateway's messages. |
+
+The gateway returns `['data' => [...]]` in the shape of `schema`. Invalid types and unknown resources are dropped;
+dates and lengths use the same limits as the form (62 days, 5 minutes to 24 hours). Each user can send 10 sentences
+a minute. Events and other records are never sent. Only resources visible after tenancy and filters are sent.
+The panel explains this under the field. Use `freeSlotSearch(ai: false)` to hide it.
+
+**Writing your own gateway** (no counting, no limits). This follows the Warp Input gateway example; any service
+that answers in a JSON schema works the same way. Model names belong to your gateway, not the scheduler:
+
+```php
+// app/Ai/AiGateway.php
+namespace App\Ai;
+
+use Illuminate\Support\Facades\Http;
+use RuntimeException;
+
+class AiGateway
+{
+    public function ask(array $request): array
+    {
+        $response = Http::timeout(90)
+            ->withHeaders(['x-api-key' => config('services.anthropic.key'), 'anthropic-version' => '2023-06-01'])
+            ->post('https://api.anthropic.com/v1/messages', [
+                'model' => $request['tier'] === 'smart' ? 'claude-sonnet-5-5' : 'claude-haiku-5-5',
+                'max_tokens' => $request['max_output_tokens'] ?? 2000,
+                'system' => $request['instructions'],
+                'output_config' => ['format' => ['type' => 'json_schema', 'schema' => $request['schema']]],
+                'messages' => [['role' => 'user', 'content' => $request['input']]],
+            ])
+            ->throw();
+
+        $text = collect($response->json('content'))->firstWhere('type', 'text')['text'] ?? '';
+        $data = json_decode($text, true);
+
+        return is_array($data) ? ['data' => $data] : throw new RuntimeException('No answer.');
+    }
+}
+
+// app/Providers/AppServiceProvider.php, in register()
+$this->app->singleton('warp.ai', \App\Ai\AiGateway::class);
+```
+
+Add `unavailable(array $request): ?string` to grey out the controls (a sentence, or `null` when usable).
+Throw an exception with `userMessage(): string` to show your own message. Messages are trimmed and limited with
+`Str::limit(..., 300)`. The same `warp.ai` can serve other Warp plugins without depending on their classes.
+
+**Moving from the Anthropic key.** Bind a gateway and remove nothing else: `freeSlotSearch()` uses it as soon as
+it is bound, and `ai.model` is no longer used. Your explicit `ReadsSlotRequests` binding still takes priority.
+
+**Deprecated direct Anthropic path.** Without a gateway or a custom reader, the existing configuration keeps working:
 
 ```php
 // config/services.php
-'anthropic' => [
-    'key' => env('ANTHROPIC_API_KEY'),
-],
+'anthropic' => ['key' => env('ANTHROPIC_API_KEY')],
 ```
 
-- **What is sent to Anthropic**: the sentence the user typed, today's date and weekday, the scheduler's time zone,
-  and the keys and names of the resources on screen (for example people's names and room names). Events and other
-  records are not sent. Tell your users if your privacy policy requires it, or turn the field off with
-  `freeSlotSearch(ai: false)`. The panel shows a short note about this under the field.
-- Without a key the field is not shown, and the rest of the panel works the same.
-- The model is `claude-haiku-4-5` by default. Change it with `WARP_SCHEDULER_AI_MODEL` (or `ai.model` in the
-  published config). The request uses a forced tool call, so choose a model that accepts `tool_choice` with a named
-  tool.
-- Each user can send 10 sentences a minute. The conditions that come back are checked like the ones from the form:
-  unknown resources are dropped and the dates and lengths are kept within the limits.
-- To use another AI or your own rules, bind your class to `Qalainau\FilamentWarpScheduler\Ai\ReadsSlotRequests`
-  in a service provider.
+The default stays `claude-haiku-4-5`; change it with `WARP_SCHEDULER_AI_MODEL` (or `ai.model` in the published config).
+It uses a forced named tool call. The legacy HTTP body and the sentence field's HTML are unchanged without a gateway.
+
+The development app's **Find a slot via AI gateway** page uses a local fake, with `?limited=1` for the monthly limit
+and `?fail=1` for a refusal. Real model evaluation cases live in `tests/ai-cases/slot_request.json` and are registered
+at `warp.ai.cases.scheduler` when present (path repositories); they are not run by the automated tests.
 
 ### A form field to pick a free time (`SlotPicker`)
 

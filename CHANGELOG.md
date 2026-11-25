@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-11-25
+
+### Added
+
+- **Describe a free slot through a shared AI gateway**: when your app binds an AI gateway to `warp.ai` (Warp SaaS does it for you, or write your own in about 20 lines), the sentence field of `freeSlotSearch()` uses it instead of calling Anthropic itself. The gateway picks the model and can count and limit each request per company, person and feature. Name the feature with the new `Scheduler::aiFeature('meeting_search')`. When the gateway says the feature can't be used now (for example, the monthly limit is reached), the sentence field and its button are greyed out with the gateway’s sentence under them; when it refuses a request, the user sees its sentence. Nothing changes for apps without a gateway: your own `ReadsSlotRequests` binding still comes first, and the Anthropic key still works with the same model. Requests through the gateway are not counted against the plugin's 10-per-minute limit (the gateway applies its own quota); your own reader and the Anthropic key keep that limit. See the README.
+
+### Deprecated
+
+- Calling Anthropic directly through `services.anthropic.key` and `ai.model` for slot requests. This keeps working in 1.x with the same default model and request body, and will be removed in 2.0. Bind `warp.ai` instead.
+
 ## [1.18.0] - 2026-11-23
 
 ### Added
