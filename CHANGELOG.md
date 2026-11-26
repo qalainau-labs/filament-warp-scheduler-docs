@@ -5,7 +5,16 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.19.1] - 2026-11-27
+
+If you put the scheduler on a resource page (a page that uses `InteractsWithRecord`), please update: these fixes keep the page's own record safe.
+
+### Fixed
+
+- Put on a resource page (`InteractsWithRecord`), editing or deleting an event or a resource row that someone else had just deleted, or one the page does not show, could change or delete the page's own record. Those actions now refuse to open, as on other pages.
+- Put on a resource page, deleting an event or a resource row no longer sends you to the resource's list.
+- Put on a resource page, the edit and delete dialogs named the page's record ("Delete Room") instead of the event or row. They now name it as on other pages ("Delete room booking").
+- Pressing the button in an event's delete, edit or custom action dialog after someone else had deleted that event did nothing and left the dialog open. The dialog now closes with "This event no longer exists." and the events are loaded again.
 
 ## [1.19.0] - 2026-11-25
 
