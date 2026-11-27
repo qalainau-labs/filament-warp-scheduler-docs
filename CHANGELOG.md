@@ -5,6 +5,12 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.2] - 2026-11-27
+
+### Fixed
+
+- Pressing the button in a resource row's edit, delete or custom action (`resourceActions()`) dialog after someone else had deleted that row (or moved it out of your tenant) did nothing and left the dialog open. The dialog now closes with "This resource no longer exists." and the row disappears from the table.
+
 ## [1.19.1] - 2026-11-27
 
 If you put the scheduler on a resource page (a page that uses `InteractsWithRecord`), please update: these fixes keep the page's own record safe.
