@@ -5,6 +5,15 @@ All notable changes to `qalainau/filament-warp-scheduler` will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.19.3] - 2026-11-28
+
+### Fixed
+
+- **The timeline no longer stops when the server is slow to answer**: on a busy server Livewire sometimes ends a call without its answer. When that happened to the rows of a scheduler whose `resources()` depend on the visible period (after a row action, an event edit or changing the period), the scheduler stopped with "Cannot read properties of undefined". It now asks once more, and if there is still no answer it keeps the rows it shows.
+- The time slot search and the slot picker no longer leave an error in the browser console when a call is cancelled (leaving the page, pressing twice); exports and the board refresh no longer do either on Livewire 4.4.2–4.4.4. Reads such as the free slot search and the slot picker's days and times are asked once more; moving a card is not sent twice and the board is read again instead.
+
 ## [1.19.2] - 2026-11-27
 
 ### Fixed
